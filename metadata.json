@@ -1,0 +1,6 @@
+{
+  "name": "Saisha OS",
+  "description": "An intelligent, beautiful, and deeply personal life operating system designed to balance academics, wellness, creativity, and career.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
