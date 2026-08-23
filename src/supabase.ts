@@ -21,22 +21,17 @@ export async function signInWithGoogle() {
   if (!supabase) throw new Error("Supabase is not configured.");
 
   const redirectUrl = window.location.origin;
-  console.log("[signInWithGoogle] Initiating Google OAuth with redirectUrl:", redirectUrl);
+  const isIframe = typeof window !== "undefined" && window.self !== window.top;
+  console.log("[signInWithGoogle] Initiating Google OAuth with redirectUrl:", redirectUrl, "isIframe:", isIframe);
 
-  // Set skipBrowserRedirect: true and pass queryParams (prompt: 'consent select_account', access_type: 'offline').
-  // This resolves:
-  // 1. Google 403 framing error inside iframes (by opening the authorization in top-level window/tab).
-  // 2. Google 403 test-user bypass (by forcing the account chooser so the whitelisted test user can be selected).
+  // When inside an iframe (like AI Studio preview), use skipBrowserRedirect so we can break out of iframe safely.
+  // In standalone/production browsers (laptop and mobile), let Supabase perform native top-level browser redirect.
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
       redirectTo: redirectUrl,
-      queryParams: {
-        access_type: "offline",
-        prompt: "consent select_account"
-      },
-      skipBrowserRedirect: true
-    }
+      skipBrowserRedirect: isIframe,
+    },
   });
 
   if (error) {
@@ -44,21 +39,15 @@ export async function signInWithGoogle() {
     throw error;
   }
 
-  if (data?.url) {
-    console.log("[signInWithGoogle] Received Supabase OAuth URL:", data.url);
-    const isIframe = window.self !== window.top;
-    if (isIframe) {
-      const opened = window.open(data.url, "_blank");
-      if (!opened) {
-        // Fallback to top or current window if popup blocker blocked it
-        try {
-          window.top!.location.href = data.url;
-        } catch {
-          window.location.href = data.url;
-        }
+  if (isIframe && data?.url) {
+    console.log("[signInWithGoogle] Received Supabase OAuth URL for iframe breakout:", data.url);
+    const opened = window.open(data.url, "_blank");
+    if (!opened) {
+      try {
+        window.top!.location.href = data.url;
+      } catch {
+        window.location.href = data.url;
       }
-    } else {
-      window.location.href = data.url;
     }
   }
 }
