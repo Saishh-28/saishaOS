@@ -316,10 +316,10 @@ function KgInput({ item, value, onSave }: { item: GymItem; value: number | null;
   useEffect(() => setText(value == null ? "" : String(value)), [value]);
   return (
     <label className="kg">
-      <span className="sr">Weight for {item.name}, kg</span>
       <input
         type="text"
         inputMode="decimal"
+        aria-label={`Weight for ${item.name}, kg`}
         placeholder="–"
         value={text}
         onChange={(e) => setText(e.target.value)}

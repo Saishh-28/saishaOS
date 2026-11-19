@@ -66,7 +66,7 @@ You need Node 20+ and a Supabase project. A Gemini API key is only needed for th
 
 Other scripts: `npm test` (Vitest), `npm run lint` (type-check), `npm run build`, `npm run preview` (production build served by the local Workers runtime).
 
-**Dev-only date override:** `/planner?date=2026-11-23` pretends today is that date, which is handy for testing gym days and rollover. It's removed from production builds.
+**Dev-only date override:** `/planner?date=2026-11-23` pretends today is that date, which is handy for testing gym days and rollover. It's removed from production builds. **Careful:** opening a date creates that day's list in your real Supabase data (the same as opening the planner on that day), so delete test days afterwards or use a test account.
 
 ## Deploy (Cloudflare Workers)
 
