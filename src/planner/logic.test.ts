@@ -23,7 +23,7 @@ import {
   gymKey,
   currentSlotIndex,
 } from "./logic";
-import { STUDY, WORKOUT, HABITS } from "./plan";
+import { STUDY, WORKOUT, HABITS, SCHEDULE } from "./plan";
 
 const PLAN = buildPlanTasks();
 const done = (entries: Record<string, string> = {}): Completions => new Map(Object.entries(entries));
@@ -234,7 +234,7 @@ describe("today view helpers", () => {
   it("highlights the slot that contains the current time", () => {
     expect(currentSlotIndex(6 * 60)).toBe(-1);
     expect(currentSlotIndex(9 * 60 + 30)).toBe(3); // Deep work 1
-    expect(currentSlotIndex(23 * 60)).toBe(13); // Sleep
+    expect(SCHEDULE[currentSlotIndex(23 * 60)].label).toBe("Sleep");
   });
 
   it("progress counts tasks, habits and a full water bottle", () => {

@@ -15,6 +15,7 @@ import {
 import {
   bestWeightBefore,
   formatClock,
+  longDate,
   formatKg,
   GymItem,
   GymSession,
@@ -289,10 +290,10 @@ function Crystals({ lit, total }: { lit: number; total: number }) {
   );
 }
 
-function WeekStrip({ p, today }: { p: Planner; today: string }) {
+function WeekStrip({ p, today, selected, onSelect }: { p: Planner; today: string; selected: string; onSelect: (d: string) => void }) {
   const monday = addDays(today, -((dayOfWeek(today) + 6) % 7));
   return (
-    <div className="weekstrip" aria-label="This week">
+    <div className="weekstrip" role="group" aria-label="This week: tap a day to see its session">
       {WEEK_LETTERS.map((l, i) => {
         const d = addDays(monday, i);
         const s = sessionFor(d);
@@ -300,10 +301,15 @@ function WeekStrip({ p, today }: { p: Planner; today: string }) {
         const state = done ? "done" : d === today ? "today" : s.kind === "rest" ? "rest" : d < today ? "missed" : "plan";
         return (
           <div key={d} className="wd">
-            <span className="l">{l}</span>
-            <div className={"wbox " + state} title={`${d}: ${s.title}${done ? " (done)" : ""}`}>
-              <span>{KIND_SHORT[s.kind]}</span>
-            </div>
+            <span className="l" aria-hidden="true">{l}</span>
+            <Btn
+              className={"wbox " + state + (d === selected ? " selected" : "")}
+              aria-pressed={d === selected}
+              aria-label={`${longDate(d)}: ${s.title}${done ? ", done" : ""}`}
+              onClick={() => onSelect(d)}
+            >
+              {KIND_SHORT[s.kind]}
+            </Btn>
           </div>
         );
       })}
@@ -404,16 +410,24 @@ function YogaTimerPanel({ item, onFinish, onStop }: { item: GymItem; onFinish: (
 }
 
 export function GymScreen({ p, today, toast }: ScreenProps) {
-  const session = sessionFor(today);
-  const logs = p.exercisesFor(today);
+  // The day being shown: today by default; tap another day in the week strip to see it.
+  // Past days can still be ticked (catch up on a forgotten log); future days are a preview.
+  const [day, setDay] = useState(today);
+  useEffect(() => setDay(today), [today]);
+  const isToday = day === today;
+  const future = day > today;
+  const session = sessionFor(day);
+  const logs = p.exercisesFor(day);
   const all = p.snap!.exercises;
   const [active, setActive] = useState<string | null>(null);
+  useEffect(() => setActive(null), [day]);
   const doneCount = session.items.filter((i) => logs[i.key]?.done).length;
-  const habits = p.habitsFor(today);
+  const habits = p.habitsFor(day);
 
   const tick = (item: GymItem, checked: boolean) => {
+    if (future) return;
     if (checked) playTick(p, today);
-    const completed = p.setExercise(session, item.key, { done: checked, sets: item.sets ?? null });
+    const completed = p.setExercise(session, item.key, { done: checked, sets: item.sets ?? null }, day);
     if (completed) {
       sfx.blockComplete();
       toast(`${session.title} done. Gym habit ticked ✨`);
@@ -425,21 +439,31 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
       <div className="card gym-hero">
         <Crystals lit={doneCount} total={session.items.length || 5} />
         <div className="gh-body">
-          <span className="eyebrow">{session.subtitle.toUpperCase()}</span>
+          <span className="eyebrow">
+            {isToday ? session.subtitle.toUpperCase() : `${future ? "PREVIEW" : "PAST DAY"} · ${longDate(day).toUpperCase()}`}
+          </span>
           <h2 style={{ margin: 0 }}>{session.title}</h2>
           {session.kind === "rest" ? (
             <span className="muted">Steps only. Recover.</span>
           ) : (
             <>
               <span className="muted">
-                {doneCount} of {session.items.length} {session.kind === "yoga" ? "poses" : "crystals"} lit today
+                {doneCount} of {session.items.length} {session.kind === "yoga" ? "poses" : "crystals"} lit{isToday ? " today" : ""}
               </span>
               <Progress pct={Math.round((doneCount / session.items.length) * 100)} label="Session progress" />
             </>
           )}
         </div>
       </div>
-      <WeekStrip p={p} today={today} />
+      <WeekStrip p={p} today={today} selected={day} onSelect={setDay} />
+      {!isToday && (
+        <div className="note day-note">
+          <span>{future ? "This is a preview. You can tick it on the day." : "Catching up: ticks and weights save to this day."}</span>
+          <Btn className="btn ghost" onClick={() => setDay(today)}>
+            Back to today
+          </Btn>
+        </div>
+      )}
 
       {session.kind === "rest" && (
         <div className="lumi-row">
@@ -455,12 +479,17 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
           {session.items.map((item) => {
             const log = logs[item.key];
             const done = !!log?.done;
-            const last = item.weighted ? lastWeight(all, item.key, today) : null;
-            const best = item.weighted ? bestWeightBefore(all, item.key, today) : null;
+            const last = item.weighted ? lastWeight(all, item.key, day) : null;
+            const best = item.weighted ? bestWeightBefore(all, item.key, day) : null;
             const pb = log?.weightKg != null && best != null && log.weightKg > best;
             return (
               <li key={item.key} className={"quest" + (done ? " done" : "")}>
-                <Orb checked={done} label={(done ? "Done: " : "Mark done: ") + item.name} onChange={(v) => tick(item, v)} />
+                <Orb
+                  checked={done}
+                  disabled={future}
+                  label={(future ? "Preview: " : done ? "Done: " : "Mark done: ") + item.name}
+                  onChange={(v) => tick(item, v)}
+                />
                 <div className="q-body">
                   <span className="q-text">{item.name}</span>
                   {item.tip && <span className="tip">{item.tip}</span>}
@@ -470,7 +499,7 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
                   </span>
                 </div>
                 {pb && <span className="chip gold">NEW BEST</span>}
-                {item.weighted && (
+                {item.weighted && !future && (
                   <KgInput
                     item={item}
                     value={log?.weightKg ?? null}
@@ -479,7 +508,7 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
                         toast("Weight should be a number like 22.5");
                         return false;
                       }
-                      if (kg !== (log?.weightKg ?? null)) p.setExercise(session, item.key, { weightKg: kg, sets: item.sets ?? null });
+                      if (kg !== (log?.weightKg ?? null)) p.setExercise(session, item.key, { weightKg: kg, sets: item.sets ?? null }, day);
                       return true;
                     }}
                   />
@@ -492,7 +521,7 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
                 {item.timer && active === item.key && (
                   <YogaTimerPanel
                     item={item}
-                    onFinish={() => !done && tick(item, true)}
+                    onFinish={() => !done && !future && tick(item, true)}
                     onStop={() => setActive(null)}
                   />
                 )}
@@ -514,7 +543,7 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
 /* Habits                                                              */
 /* ------------------------------------------------------------------ */
 
-export function HabitsScreen({ p, today }: ScreenProps) {
+export function HabitsScreen({ p, today, toast }: ScreenProps) {
   const habits = p.habitsFor(today);
   const snap = p.snap!;
   const week = Array.from({ length: 7 }, (_, k) => addDays(today, k - 6));
@@ -535,7 +564,13 @@ export function HabitsScreen({ p, today }: ScreenProps) {
               className={i <= p.water ? "on" : ""}
               aria-label={`${i} glass${i > 1 ? "es" : ""}`}
               aria-pressed={i <= p.water}
-              onClick={() => p.setWater(p.water === i ? i - 1 : i)}
+              onClick={() => {
+                const next = p.water === i ? i - 1 : i;
+                sfx.water(p.water, next);
+                if (next === 4 && p.water < 4) toast("Halfway there: 4 glasses 💧");
+                if (next === WATER_MAX && p.water < WATER_MAX) toast("All 8 glasses done ✨");
+                p.setWater(next);
+              }}
             />
           ))}
         </div>

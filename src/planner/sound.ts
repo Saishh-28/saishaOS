@@ -50,6 +50,14 @@ export function tickSound(n: number): SoundName {
   return `tick-${Math.min(6, Math.max(1, Math.floor(n) || 1))}` as SoundName;
 }
 
+/** Water milestones: reaching 4 glasses is "half", reaching 8 is "full". Going down plays nothing. */
+export function waterMilestone(prev: number, next: number): "half" | "full" | null {
+  if (next <= prev) return null;
+  if (prev < 8 && next >= 8) return "full";
+  if (prev < 4 && next >= 4) return "half";
+  return null;
+}
+
 export function parseSettings(raw: string | null): SoundSettings {
   try {
     const v = raw ? JSON.parse(raw) : {};
@@ -147,6 +155,20 @@ class SoundBoard {
 
   blockComplete() {
     this.play("block-complete", 350);
+  }
+
+  /** Water glasses changed: a chime at 4 glasses, a bigger one at 8. */
+  water(prev: number, next: number) {
+    const m = waterMilestone(prev, next);
+    if (m === "half") {
+      this.play("tick-3");
+      this.play("xp-sparkle", 160, 0.8);
+      this.vibrate(VIBRATE.tick);
+    } else if (m === "full") {
+      this.play("block-complete");
+      this.play("xp-sparkle", 250, 0.8);
+      this.vibrate(VIBRATE.cue);
+    }
   }
 
   levelUp() {

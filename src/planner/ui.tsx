@@ -99,11 +99,13 @@ export function Orb({
   onChange,
   label,
   xp,
+  disabled,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   label: string;
   xp?: number;
+  disabled?: boolean;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [burst, setBurst] = useState(0);
@@ -116,7 +118,8 @@ export function Orb({
         aria-checked={checked}
         aria-label={label}
         className={"orb" + (checked ? " on" : "")}
-        whileTap={{ scale: 0.86 }}
+        disabled={disabled}
+        whileTap={disabled ? undefined : { scale: 0.86 }}
         animate={checked ? { scale: [1, 1.18, 1] } : { scale: 1 }}
         transition={{ type: "spring", stiffness: 520, damping: 16 }}
         onClick={() => {

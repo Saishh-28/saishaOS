@@ -13,10 +13,10 @@ import {
   totalSeconds,
   YOGA,
 } from "./gym";
-import { dayProgress, habitsOn, ticksOn, csvRows } from "./logic";
-import { HABITS } from "./plan";
+import { currentSlotIndex, dayProgress, habitsOn, ticksOn, csvRows } from "./logic";
+import { HABITS, SCHEDULE } from "./plan";
 import { buildReport } from "./report";
-import { DEFAULT_SETTINGS, parseSettings, tickSound } from "./sound";
+import { DEFAULT_SETTINGS, parseSettings, tickSound, waterMilestone } from "./sound";
 
 const log = (weightKg: number | null, done = true): ExerciseLog => ({ done, weightKg, sets: 3, reps: null });
 
@@ -142,5 +142,25 @@ describe("India time", () => {
     // 19:00 UTC on the 19th is 00:30 on the 20th in India.
     expect(clockIn(new Date("2026-11-19T19:00:00Z"))).toEqual({ date: "2026-11-20", hour: 0, minute: 30 });
     expect(clockIn(new Date("2026-11-19T18:29:00Z")).date).toBe("2026-11-19");
+  });
+});
+
+describe("water milestones", () => {
+  it("chimes when reaching 4 and 8 glasses, not when going down or past them", () => {
+    expect(waterMilestone(3, 4)).toBe("half");
+    expect(waterMilestone(7, 8)).toBe("full");
+    expect(waterMilestone(2, 8)).toBe("full"); // tapping the 8th glass directly
+    expect(waterMilestone(4, 5)).toBeNull();
+    expect(waterMilestone(5, 4)).toBeNull();
+    expect(waterMilestone(8, 7)).toBeNull();
+  });
+});
+
+describe("schedule", () => {
+  it("8:14 pm is still the 6:30 block; the 8:30 pm evening review comes next", () => {
+    const i = currentSlotIndex(20 * 60 + 14);
+    expect(SCHEDULE[i].time).toBe("18:30");
+    expect(SCHEDULE[i + 1]).toMatchObject({ time: "20:30", link: "review" });
+    expect(SCHEDULE[currentSlotIndex(20 * 60 + 40)].label).toMatch(/Evening review/);
   });
 });
