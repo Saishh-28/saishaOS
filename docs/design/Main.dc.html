@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Saisha OS – Kingdom home</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&amp;family=Nunito:wght@500;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffd98a}a:hover{color:#fff1c9}
+@keyframes floatA{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes floatB{0%,100%{transform:translateY(-6px)}50%{transform:translateY(6px)}}
+@keyframes twinkle{0%,100%{opacity:.25}50%{opacity:1}}
+@keyframes rise{0%{transform:translateY(0);opacity:0}20%{opacity:1}100%{transform:translateY(-120px);opacity:0}}
+@keyframes shimmer{0%{transform:translateX(-120%)}60%,100%{transform:translateX(320%)}}
+.fa{animation:floatA 7s ease-in-out infinite}
+.fb{animation:floatB 9s ease-in-out infinite}
+.tw{animation:twinkle 3s ease-in-out infinite}
+.ff{animation:rise 6s linear infinite}
+.sh{animation:shimmer 3.5s ease-in-out infinite}
+</style>
+</helmet>
+<div style="width:390px;height:844px;position:relative;overflow:hidden;font-family:'Nunito',sans-serif;color:#f6f0ff;background:linear-gradient(180deg,#0d0a2a 0%,#24185a 45%,#5a3584 78%,#a5658f 100%)">
+
+  <sc-for list="{{stars}}" as="s" hint-placeholder-count="20">
+    <div class="tw" style="{{s.style}}"></div>
+  </sc-for>
+  <sc-for list="{{flies}}" as="f" hint-placeholder-count="8">
+    <div class="ff" style="{{f.style}}"></div>
+  </sc-for>
+
+  <div style="position:absolute;left:-60px;top:250px;width:520px;height:320px;border-radius:50%;background:radial-gradient(closest-side,rgba(142,230,224,0.18),rgba(142,230,224,0))"></div>
+
+  <header style="position:relative;padding:22px 20px 0;display:flex;flex-direction:column;gap:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <span style="font-size:13px;color:#d9cff5;font-weight:700;letter-spacing:.06em">THURSDAY · TWILIGHT</span>
+        <h1 style="margin:0;font-family:'Fraunces',serif;font-weight:700;font-size:28px;line-height:1.1">Good evening, Saish</h1>
+      </div>
+      <button aria-label="Streak: 12 days, 1 shield" style="display:flex;align-items:center;gap:6px;min-height:44px;padding:6px 12px;border-radius:22px;border:1px solid rgba(255,217,138,0.45);background:rgba(255,217,138,0.12);color:#ffe7b3;font-family:'Nunito',sans-serif;font-weight:800;font-size:15px">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ffd98a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3c2 3 5 5 5 9a5 5 0 0 1-10 0c0-2 1-3 2-4 0 2 1 3 2 3 0-3-1-5 1-8z"/></svg>
+        12
+      </button>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:8px;padding:14px 16px;border-radius:20px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.16);box-shadow:0 10px 30px rgba(8,4,30,0.35), inset 0 1px 0 rgba(255,255,255,0.18)">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <span style="font-family:'Fraunces',serif;font-size:17px;font-weight:700">Level 7 · Dreamweaver</span>
+        <span style="font-size:13px;color:#d9cff5;font-weight:700">640 / 1000 XP</span>
+      </div>
+      <div style="position:relative;height:12px;border-radius:6px;background:rgba(10,6,40,0.55);overflow:hidden">
+        <div style="width:64%;height:100%;border-radius:6px;background:linear-gradient(90deg,#8ee6e0,#f2c6b4,#ffd98a);box-shadow:0 0 12px rgba(255,217,138,0.7)"></div>
+        <div class="sh" style="position:absolute;top:0;left:0;width:60px;height:100%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,0.65),rgba(255,255,255,0))"></div>
+      </div>
+    </div>
+  </header>
+
+  <section aria-label="Your kingdom" style="position:absolute;left:0;top:200px;width:390px;height:430px">
+    <sc-for list="{{islands}}" as="i" hint-placeholder-count="5">
+      <a href="{{i.href}}" class="{{i.anim}}" style="{{i.pos}}">
+        <div style="position:relative;width:{{i.w}}px;display:flex;flex-direction:column;align-items:center">
+          <div style="position:absolute;top:-14px;width:80%;height:40px;border-radius:50%;background:{{i.glow}};filter:blur(14px);opacity:.75"></div>
+          <div style="position:relative;width:100%;height:22px;border-radius:50%;background:{{i.top}};box-shadow:inset 0 3px 6px rgba(255,255,255,0.45)"></div>
+          <div style="width:86%;height:{{i.depth}}px;margin-top:-10px;clip-path:polygon(0 0,100% 0,64% 100%,36% 100%);background:linear-gradient(180deg,#5b4a8f,#2a1f55)"></div>
+          <div style="position:absolute;top:-36px;display:flex;gap:4px;align-items:flex-end">
+            <div style="width:10px;height:{{i.spire}}px;border-radius:5px 5px 2px 2px;background:{{i.spireColor}};box-shadow:0 0 10px {{i.spireColor}}"></div>
+            <div style="width:14px;height:22px;border-radius:7px 7px 2px 2px;background:{{i.spireColor}};opacity:.85"></div>
+          </div>
+        </div>
+        <div style="margin-top:6px;text-align:center;display:flex;flex-direction:column;gap:1px">
+          <span style="font-size:13px;font-weight:800;color:#fff7e6;text-shadow:0 1px 6px rgba(10,6,40,0.8)">{{i.name}}</span>
+          <span style="font-size:12px;font-weight:700;color:#e3dafa">{{i.skill}} · Lv {{i.level}}</span>
+        </div>
+      </a>
+    </sc-for>
+
+    <div class="fa" style="position:absolute;left:150px;top:150px;display:flex;flex-direction:column;align-items:center">
+      <svg width="92" height="92" viewBox="0 0 100 100" role="img" aria-label="Lumi, your star spirit">
+        <defs>
+          <radialGradient id="lg" cx="50%" cy="45%" r="55%">
+            <stop offset="0%" stop-color="#fffbe9"/>
+            <stop offset="45%" stop-color="#ffe7a8"/>
+            <stop offset="100%" stop-color="#ffd98a" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <circle cx="50" cy="50" r="48" fill="url(#lg)"/>
+        <path d="M50 18 C54 38 62 46 82 50 C62 54 54 62 50 82 C46 62 38 54 18 50 C38 46 46 38 50 18 Z" fill="#fff6d6"/>
+        <ellipse cx="44" cy="49" rx="2.6" ry="3.6" fill="#3b2a6b"/>
+        <ellipse cx="56" cy="49" rx="2.6" ry="3.6" fill="#3b2a6b"/>
+        <circle cx="40" cy="56" r="3" fill="#f6a8b8" opacity=".7"/>
+        <circle cx="60" cy="56" r="3" fill="#f6a8b8" opacity=".7"/>
+        <path d="M46 57 Q50 61 54 57" stroke="#3b2a6b" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+  </section>
+
+  <div style="position:absolute;left:20px;top:470px;max-width:220px;padding:10px 14px;border-radius:16px 16px 16px 4px;background:rgba(255,251,233,0.94);color:#2e2160;font-size:14px;font-weight:700;line-height:1.35;box-shadow:0 8px 24px rgba(8,4,30,0.35)">
+    Two quests left before the stars come out. You've got this!
+  </div>
+
+  <section style="position:absolute;left:20px;right:20px;bottom:96px;display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:22px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.18);box-shadow:0 12px 34px rgba(8,4,30,0.4), inset 0 1px 0 rgba(255,255,255,0.2)">
+    <div style="position:relative;width:52px;height:52px;border-radius:50%;background:conic-gradient(#8ee6e0 0 288deg,rgba(255,255,255,0.15) 288deg 360deg);display:flex;align-items:center;justify-content:center">
+      <div style="width:40px;height:40px;border-radius:50%;background:#2a1d5e;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px">8/10</div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+      <span style="font-family:'Fraunces',serif;font-weight:700;font-size:16px">Today's quests</span>
+      <span style="font-size:13px;color:#e3dafa">Next: R4DS – dplyr mutate</span>
+    </div>
+    <a href="Quests.dc.html" style="min-height:44px;padding:0 16px;display:flex;align-items:center;border-radius:22px;background:linear-gradient(180deg,#ffe7a8,#f2b98f);color:#2e2160;font-weight:800;font-size:14px;text-decoration:none;box-shadow:0 4px 0 #b9776a">Continue</a>
+  </section>
+
+  <nav aria-label="Main" style="position:absolute;left:12px;right:12px;bottom:14px;height:68px;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));align-items:center;border-radius:24px;background:rgba(14,9,44,0.7);border:1px solid rgba(255,255,255,0.12)">
+    <sc-for list="{{nav}}" as="n" hint-placeholder-count="5">
+      <a href="{{n.href}}" aria-label="{{n.label}}" style="min-height:44px;display:flex;flex-direction:column;align-items:center;gap:3px;text-decoration:none;color:{{n.color}};font-size:11px;font-weight:800">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{n.icon}}"/></svg>
+        {{n.label}}
+      </a>
+    </sc-for>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var stars = [];
+    var seed = 7;
+    function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    for (var i = 0; i < 34; i++) {
+      var size = 1 + Math.round(rnd() * 2);
+      stars.push({ style: 'position:absolute;left:' + Math.round(rnd() * 380) + 'px;top:' + Math.round(rnd() * 330) + 'px;width:' + size + 'px;height:' + size + 'px;border-radius:50%;background:#fff;box-shadow:0 0 6px #fff;animation-delay:' + (rnd() * 3).toFixed(2) + 's' });
+    }
+    var flies = [];
+    for (var j = 0; j < 12; j++) {
+      flies.push({ style: 'position:absolute;left:' + Math.round(rnd() * 370) + 'px;top:' + Math.round(560 + rnd() * 200) + 'px;width:4px;height:4px;border-radius:50%;background:#ffe7a8;box-shadow:0 0 10px 2px rgba(255,217,138,0.8);animation-delay:' + (rnd() * 6).toFixed(2) + 's' });
+    }
+    var islands = [
+      { name: 'Crystal Mountains', skill: 'Body', level: 4, href: 'Gym.dc.html', anim: 'fa', pos: 'position:absolute;left:18px;top:30px;display:flex;flex-direction:column;align-items:center;text-decoration:none;animation-delay:-1s', w: 112, depth: 46, top: 'linear-gradient(180deg,#bff3f0,#6fc9d6)', glow: '#8ee6e0', spire: 34, spireColor: '#9ff0ff' },
+      { name: 'Library of Stars', skill: 'Mind', level: 6, href: 'Quests.dc.html', anim: 'fb', pos: 'position:absolute;left:236px;top:14px;display:flex;flex-direction:column;align-items:center;text-decoration:none', w: 120, depth: 52, top: 'linear-gradient(180deg,#d9c8ff,#9a7ce0)', glow: '#b89cff', spire: 40, spireColor: '#d8c6ff' },
+      { name: 'Market Square', skill: 'Business', level: 2, href: 'Quests.dc.html', anim: 'fb', pos: 'position:absolute;left:8px;top:250px;display:flex;flex-direction:column;align-items:center;text-decoration:none;animation-delay:-3s', w: 100, depth: 40, top: 'linear-gradient(180deg,#ffe1b8,#e9a86f)', glow: '#ffd98a', spire: 24, spireColor: '#ffd98a' },
+      { name: 'Moonlit Garden', skill: 'Glow', level: 5, href: 'Main.dc.html', anim: 'fa', pos: 'position:absolute;left:262px;top:230px;display:flex;flex-direction:column;align-items:center;text-decoration:none;animation-delay:-4s', w: 108, depth: 44, top: 'linear-gradient(180deg,#ffd0de,#e48fb0)', glow: '#f6a8c8', spire: 28, spireColor: '#ffc4d8' },
+      { name: 'Riverside Cottage', skill: 'Family', level: 7, href: 'Main.dc.html', anim: 'fb', pos: 'position:absolute;left:140px;top:300px;display:flex;flex-direction:column;align-items:center;text-decoration:none;animation-delay:-2s', w: 104, depth: 38, top: 'linear-gradient(180deg,#c8f0c6,#7fc59a)', glow: '#9fe3b5', spire: 22, spireColor: '#ffe7a8' }
+    ];
+    var nav = [
+      { label: 'Kingdom', href: 'Main.dc.html', color: '#ffd98a', icon: 'M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z' },
+      { label: 'Quests', href: 'Quests.dc.html', color: '#d9cff5', icon: 'M9 6h11M9 12h11M9 18h11M4 6l1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2' },
+      { label: 'Gym', href: 'Gym.dc.html', color: '#d9cff5', icon: 'M6 7v10M18 7v10M3 10v4M21 10v4M6 12h12' },
+      { label: 'Rewards', href: 'LevelUp.dc.html', color: '#d9cff5', icon: 'M4 10h16v10H4zM2 7h20v3H2zM12 7v13M12 7c-2-4-6-3-5 0M12 7c2-4 6-3 5 0' },
+      { label: 'Lumi', href: 'Main.dc.html', color: '#d9cff5', icon: 'M12 3l2 6 6 1-5 4 2 6-5-3-5 3 2-6-5-4 6-1z' }
+    ];
+    return { stars: stars, flies: flies, islands: islands, nav: nav };
+  }
+}
+</script>
+</body>
+</html>

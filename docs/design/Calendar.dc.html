@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Saisha OS – Progress calendar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&amp;family=Nunito:wght@500;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffd98a}a:hover{color:#fff1c9}
+@keyframes twinkle{0%,100%{opacity:.6}50%{opacity:1}}
+@keyframes floatA{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
+.tw{animation:twinkle 2.6s ease-in-out infinite}
+.fa{animation:floatA 6s ease-in-out infinite}
+</style>
+</helmet>
+<div style="width:390px;height:844px;position:relative;overflow:hidden;font-family:'Nunito',sans-serif;color:#f6f0ff;background:linear-gradient(180deg,#110c33 0%,#22175a 55%,#3a2370 100%)">
+
+  <header style="padding:20px 20px 0;display:flex;align-items:center;gap:12px">
+    <a href="Main.dc.html" aria-label="Back to the kingdom" style="width:44px;height:44px;border-radius:22px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.16);color:#f6f0ff">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>
+    </a>
+    <div style="flex:1;display:flex;flex-direction:column">
+      <span style="font-size:13px;font-weight:700;color:#d9cff5;letter-spacing:.06em">YOUR JOURNEY · WEEK 5 OF 13</span>
+      <h1 style="margin:0;font-family:'Fraunces',serif;font-size:24px;font-weight:700">Progress calendar</h1>
+    </div>
+  </header>
+
+  <div aria-label="13-week journey, 19 Nov to 20 Feb" style="margin:12px 20px 0;display:grid;grid-template-columns:repeat(13,minmax(0,1fr));gap:4px">
+    <sc-for list="{{journey}}" as="j" hint-placeholder-count="13">
+      <div style="{{j.style}}"></div>
+    </sc-for>
+  </div>
+  <div style="margin:4px 20px 0;display:flex;justify-content:space-between;font-size:11px;font-weight:800;color:#cfc3ef"><span>19 NOV · INDIA</span><span>20 FEB · FLY TO NZ</span></div>
+
+  <div style="margin:12px 20px 0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px">
+    <sc-for list="{{stats}}" as="t" hint-placeholder-count="4">
+      <div style="padding:10px 6px;border-radius:16px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);display:flex;flex-direction:column;align-items:center;gap:2px">
+        <span style="font-family:'Fraunces',serif;font-size:19px;font-weight:700;color:{{t.color}}">{{t.value}}</span>
+        <span style="font-size:11px;font-weight:800;color:#d9cff5;text-align:center">{{t.label}}</span>
+      </div>
+    </sc-for>
+  </div>
+
+  <section aria-label="December 2026" style="margin:12px 20px 0;padding:14px 12px;border-radius:22px;background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.15);box-shadow:0 12px 30px rgba(8,4,30,0.4), inset 0 1px 0 rgba(255,255,255,0.15)">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <button aria-label="Previous month" style="width:44px;height:44px;border-radius:22px;border:none;background:rgba(255,255,255,0.08);color:#f6f0ff;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button>
+      <span style="font-family:'Fraunces',serif;font-size:18px;font-weight:700">December 2026</span>
+      <button aria-label="Next month" style="width:44px;height:44px;border-radius:22px;border:none;background:rgba(255,255,255,0.08);color:#f6f0ff;display:flex;align-items:center;justify-content:center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg></button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px">
+      <sc-for list="{{dow}}" as="w" hint-placeholder-count="7">
+        <span style="text-align:center;font-size:11px;font-weight:800;color:#cfc3ef">{{w}}</span>
+      </sc-for>
+      <sc-for list="{{days}}" as="d" hint-placeholder-count="35">
+        <div class="{{d.cls}}" style="{{d.style}}">
+          <span style="{{d.numStyle}}">{{d.n}}</span>
+          <sc-if value="{{d.gym}}" hint-placeholder-val="{{false}}">
+            <span style="position:absolute;left:5px;bottom:4px;width:5px;height:5px;border-radius:50%;background:#bff3f0;box-shadow:0 0 5px #8ee6e0"></span>
+          </sc-if>
+          <sc-if value="{{d.star}}" hint-placeholder-val="{{false}}">
+            <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true" style="position:absolute;right:3px;top:3px"><path d="M12 2l2.6 6.6L21 9.3l-5 4.4 1.5 6.8L12 17l-5.5 3.5L8 13.7 3 9.3l6.4-.7z" fill="#ffd98a"/></svg>
+          </sc-if>
+          <sc-if value="{{d.shield}}" hint-placeholder-val="{{false}}">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#c9b8ff" stroke-width="2.4" aria-hidden="true" style="position:absolute;right:3px;top:3px"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/></svg>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:10px 14px;font-size:11px;font-weight:800;color:#d9cff5">
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:4px;background:rgba(255,255,255,0.1)"></span>Under 50%</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:4px;background:rgba(142,230,224,0.45)"></span>50–79%</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:4px;background:linear-gradient(180deg,#fff1c9,#ffd98a);box-shadow:0 0 6px rgba(255,217,138,0.8)"></span>80%+</span>
+      <span style="display:flex;align-items:center;gap:5px"><span style="width:6px;height:6px;border-radius:50%;background:#bff3f0"></span>Gym</span>
+      <span style="display:flex;align-items:center;gap:5px"><svg width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2l2.6 6.6L21 9.3l-5 4.4 1.5 6.8L12 17l-5.5 3.5L8 13.7 3 9.3l6.4-.7z" fill="#ffd98a"/></svg>Level up</span>
+      <span style="display:flex;align-items:center;gap:5px"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#c9b8ff" stroke-width="2.6" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z"/></svg>Shield used</span>
+    </div>
+  </section>
+
+  <section aria-label="Skills this month" style="margin:12px 20px 0;display:flex;flex-direction:column;gap:7px">
+    <sc-for list="{{skills}}" as="k" hint-placeholder-count="5">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="width:96px;font-size:12px;font-weight:800;color:#efe6ff">{{k.name}}</span>
+        <div style="flex:1;height:8px;border-radius:4px;background:rgba(10,6,40,0.55);overflow:hidden"><div style="{{k.bar}}"></div></div>
+        <span style="width:44px;text-align:right;font-size:12px;font-weight:800;color:{{k.color}}">{{k.gain}}</span>
+      </div>
+    </sc-for>
+  </section>
+
+  <div class="fa" style="position:absolute;left:20px;right:20px;bottom:18px;display:flex;align-items:center;gap:10px;padding:10px 14px;border-radius:18px;background:rgba(255,251,233,0.94);color:#2e2160">
+    <svg width="34" height="34" viewBox="0 0 100 100" aria-hidden="true" style="flex:0 0 auto"><defs><radialGradient id="lc" cx="50%" cy="45%" r="55%"><stop offset="0%" stop-color="#fffbe9"/><stop offset="45%" stop-color="#ffe7a8"/><stop offset="100%" stop-color="#ffd98a" stop-opacity="0"/></radialGradient></defs><circle cx="50" cy="50" r="48" fill="url(#lc)"/><path d="M50 18 C54 38 62 46 82 50 C62 54 54 62 50 82 C46 62 38 54 18 50 C38 46 46 38 50 18 Z" fill="#f2c46b"/><ellipse cx="44" cy="49" rx="2.6" ry="3.6" fill="#3b2a6b"/><ellipse cx="56" cy="49" rx="2.6" ry="3.6" fill="#3b2a6b"/><path d="M46 57 Q50 61 54 57" stroke="#3b2a6b" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    <span style="font-size:13px;font-weight:800;line-height:1.35">Your brightest week: 7–13 Dec at 94%. Mind grew fastest this month!</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var pct = [78, 85, 92, 88, 70, 95, 60, 82, 0, 90, 94, 97, 100, 91, 86, 88, 74, 92, 80, 64];
+    var gymDays = [2, 4, 7, 9, 11, 14, 16, 18];
+    var today = 20;
+    var days = [];
+    days.push({ n: '', style: 'height:40px', numStyle: '', cls: '', gym: false, star: false, shield: false });
+    for (var d = 1; d <= 31; d++) {
+      var p = d <= pct.length ? pct[d - 1] : null;
+      var bg, num = 'font-size:13px;font-weight:800;';
+      if (d === today) { bg = 'background:rgba(255,217,138,0.18);border:2px solid #ffd98a;box-sizing:border-box'; num += 'color:#ffe7b3'; }
+      else if (p === null) { bg = 'background:rgba(255,255,255,0.04);border:1px dashed rgba(255,255,255,0.14);box-sizing:border-box'; num += 'color:#9f94c4'; }
+      else if (p >= 80) { bg = 'background:linear-gradient(180deg,#fff1c9,#ffd98a);box-shadow:0 0 10px rgba(255,217,138,0.55)'; num += 'color:#2e2160'; }
+      else if (p >= 50) { bg = 'background:rgba(142,230,224,0.45)'; num += 'color:#f6f0ff'; }
+      else { bg = 'background:rgba(255,255,255,0.1)'; num += 'color:#e3dafa'; }
+      days.push({
+        n: String(d),
+        cls: (p !== null && p >= 80 && d !== today) ? 'tw' : '',
+        style: 'position:relative;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;' + bg + ';animation-delay:' + ((d % 7) * 0.3).toFixed(1) + 's',
+        numStyle: num,
+        gym: gymDays.indexOf(d) >= 0,
+        star: d === 13,
+        shield: d === 9
+      });
+    }
+    var weeks = [86, 90, 83, 94, 81, null, null, null, null, null, null, null, null];
+    var journey = weeks.map(function (w, i) {
+      var st = 'height:14px;border-radius:5px;';
+      if (w === null) st += 'background:rgba(255,255,255,0.08)';
+      else if (i === 4) st += 'background:rgba(255,217,138,0.3);border:1.5px solid #ffd98a;box-sizing:border-box';
+      else st += 'background:linear-gradient(180deg,#fff1c9,#ffd98a);box-shadow:0 0 8px rgba(255,217,138,0.6)';
+      return { style: st };
+    });
+    var stats = [
+      { value: '18', label: 'day streak', color: '#ffd98a' },
+      { value: '86%', label: 'avg this month', color: '#bff3f0' },
+      { value: '2', label: 'shields left', color: '#d8c6ff' },
+      { value: '5.8k', label: 'XP earned', color: '#ffc4d8' }
+    ];
+    var raw = [
+      { name: 'Mind', gain: '+3 Lv', w: 92, c1: '#d8c6ff', c2: '#9a7ce0' },
+      { name: 'Body', gain: '+2 Lv', w: 74, c1: '#c9fbff', c2: '#6fc9d6' },
+      { name: 'Family', gain: '+2 Lv', w: 70, c1: '#c8f0c6', c2: '#7fc59a' },
+      { name: 'Glow', gain: '+1 Lv', w: 58, c1: '#ffd0de', c2: '#e48fb0' },
+      { name: 'Business', gain: '+1 Lv', w: 46, c1: '#ffe1b8', c2: '#e9a86f' }
+    ];
+    var skills = raw.map(function (k) {
+      return { name: k.name, gain: k.gain, color: k.c1, bar: 'width:' + k.w + '%;height:100%;border-radius:4px;background:linear-gradient(90deg,' + k.c2 + ',' + k.c1 + ')' };
+    });
+    return { days: days, journey: journey, stats: stats, skills: skills, dow: ['M', 'T', 'W', 'T', 'F', 'S', 'S'] };
+  }
+}
+</script>
+</body>
+</html>
