@@ -622,6 +622,15 @@ export default function App() {
 
         {/* Dynamic Auckland Clock & Daily focus */}
         <div className="flex flex-wrap items-center gap-4 text-xs font-mono">
+          {/* Daily Planner (full-page, mobile-first) */}
+          <a
+            href="/planner"
+            className="flex items-center gap-2 bg-amber-400/10 border border-amber-400/20 hover:border-amber-400/40 px-3 py-1.5 rounded-xl text-amber-300 transition-all"
+          >
+            <CheckSquare className="w-4 h-4" />
+            <span>Daily Planner</span>
+          </a>
+
           {/* NZ Local Time Indicator */}
           <div className="flex items-center gap-2 bg-white/3 border border-white/5 px-3 py-1.5 rounded-xl">
             <Clock className="w-4 h-4 text-amber-400" />
