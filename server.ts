@@ -1,3 +1,10 @@
+/**
+ * LEGACY: Express dev server from the original Google AI Studio starter.
+ * Not used in production (Cloudflare runs worker.ts) and no longer used for
+ * local dev (`npm run dev` now runs worker.ts through @cloudflare/vite-plugin).
+ * Kept temporarily as `npm run dev:express-legacy`; scheduled for removal.
+ * Do not add new routes here: add them to worker.ts.
+ */
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
