@@ -79,7 +79,7 @@ npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_ANON_KEY
 ```
 
-Optional: `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODEL` (default `gemini-flash-lite-latest`, or `none`). You can also set all of these in the Cloudflare dashboard under **Workers & Pages → saisha-os → Settings → Variables and Secrets**. `keep_vars: true` in `wrangler.json` stops a deploy from wiping them.
+Optional: `GEMINI_MODEL` (default `gemini-3.6-flash`) and `GEMINI_FALLBACK_MODEL` (default `gemini-flash-lite-latest`, or `none`). You can also set all of these in the Cloudflare dashboard under **Workers & Pages → saishaos → Settings → Variables and Secrets**. `keep_vars: true` in `wrangler.json` stops a deploy from wiping them.
 
 ### 2. Frontend values (build time)
 
