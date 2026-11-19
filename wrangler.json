@@ -1,13 +1,17 @@
 {
-  "name": "saisha-os",
+  "name": "saishaos",
   "main": "worker.ts",
   "compatibility_date": "2026-08-01",
   "compatibility_flags": [
     "nodejs_compat"
   ],
+  "keep_vars": true,
   "assets": {
-    "directory": "./dist",
+    "directory": "./dist/client",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
   }
 }

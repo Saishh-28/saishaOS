@@ -1,0 +1,18 @@
+# Local secrets for the Cloudflare Worker (used by `npm run dev`).
+# Copy this file to .dev.vars and fill it in. .dev.vars is git-ignored.
+# In production, set the same names with `npx wrangler secret put <NAME>`.
+#
+# Note: when .dev.vars exists, Wrangler stops reading .env for the Worker,
+# so the Supabase values must be repeated here.
+
+# Google AI Studio > Get API key
+GEMINI_API_KEY=""
+
+# Same values as VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY in .env
+SUPABASE_URL=""
+SUPABASE_ANON_KEY=""
+
+# Optional model overrides
+# GEMINI_MODEL="gemini-3.6-flash"
+# Lighter model tried once if the primary is busy or times out ("none" disables)
+# GEMINI_FALLBACK_MODEL="gemini-flash-lite-latest"

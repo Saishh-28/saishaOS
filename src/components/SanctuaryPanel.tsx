@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { 
   Heart, 
@@ -30,13 +30,30 @@ export default function SanctuaryPanel({ wellnessHistory, onAddWellnessEntry }: 
   const [skinNight, setSkinNight] = useState(false);
 
   const [moodScore, setMoodScore] = useState(7);
-  const [waterCups, setWaterCups] = useState(4);
+  const [waterCups, setWaterCups] = useState(0);
   const [journalText, setJournalText] = useState("");
 
-  const todayStr = new Date().toISOString().split("T")[0];
+  // Local calendar date (not UTC), so early mornings in India don't count as yesterday.
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
   // Check if today is already logged
   const todayEntry = wellnessHistory.find(h => h.date === todayStr);
+
+  // Start from today's saved values (which the Daily Planner may also have updated),
+  // so saving here never overwrites water or skincare with stale defaults.
+  useEffect(() => {
+    if (!todayEntry) return;
+    setHairOiled(todayEntry.hairRecovery.oiled);
+    setHairDermarolled(todayEntry.hairRecovery.dermarolled);
+    setHairSerum(todayEntry.hairRecovery.serumApplied);
+    setHairMassage(todayEntry.hairRecovery.massageDone);
+    setSkinMorning(todayEntry.skinRoutine.morningDone);
+    setSkinNight(todayEntry.skinRoutine.nightDone);
+    setMoodScore(todayEntry.moodScore);
+    setWaterCups(todayEntry.waterIntakeCups);
+    setJournalText(todayEntry.journalText || "");
+  }, [todayEntry]);
 
   const handleSaveToday = () => {
     const entry: WellnessEntry = {

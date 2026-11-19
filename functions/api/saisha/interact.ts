@@ -1,3 +1,10 @@
+/**
+ * LEGACY LAYOUT: this file uses the Cloudflare Pages Functions format, but the
+ * app is deployed as a Worker, so Pages never calls it directly. It is still
+ * LIVE: worker.ts imports onRequestPost for /api/saisha/interact (AI chat).
+ * Known bugs (message shape, non-existent columns) are fixed on fix/ai-chat,
+ * which will also move this into worker/.
+ */
 import { GoogleGenAI, Type } from "@google/genai";
 import { createClient } from "@supabase/supabase-js";
 
