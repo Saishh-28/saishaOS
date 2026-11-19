@@ -1,0 +1,23 @@
+{
+  "name": "Saisha OS Planner",
+  "short_name": "Planner",
+  "description": "Daily planner: deep work, course prep, gym, habits and an AI evening review.",
+  "id": "/planner",
+  "start_url": "/planner",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f1ea",
+  "theme_color": "#1f3a3d",
+  "icons": [
+    { "src": "/icons/planner-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/planner-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/planner-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Deep work", "url": "/planner/deep", "icons": [{ "src": "/icons/planner-192.png", "sizes": "192x192" }] },
+    { "name": "Course prep", "url": "/planner/study", "icons": [{ "src": "/icons/planner-192.png", "sizes": "192x192" }] },
+    { "name": "Habits", "url": "/planner/habits", "icons": [{ "src": "/icons/planner-192.png", "sizes": "192x192" }] },
+    { "name": "Evening review", "url": "/planner/review", "icons": [{ "src": "/icons/planner-192.png", "sizes": "192x192" }] }
+  ]
+}
