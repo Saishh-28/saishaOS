@@ -154,9 +154,11 @@ export interface Habit {
 }
 
 export const HABITS: Habit[] = [
-  { key: "gym", label: "Gym / workout (or stretch on rest days)", store: { kind: "habit" } },
+  { key: "gym", label: "Gym / workout", store: { kind: "habit" } },
   { key: "walk", label: "11 am walk with Dad", store: { kind: "habit" } },
   { key: "steps", label: "10k steps", store: { kind: "habit" } },
+  { key: "walkLunch", label: "Walk after lunch (10–15 min)", store: { kind: "habit" } },
+  { key: "walkDinner", label: "Walk after dinner (10–15 min)", store: { kind: "habit" } },
   { key: "skinAM", label: "Skincare AM", store: { kind: "health", metric: "skin_morning_done" } },
   { key: "skinPM", label: "Skincare PM", store: { kind: "health", metric: "skin_night_done" } },
   { key: "protein", label: "Protein at every meal", store: { kind: "habit" } },
@@ -194,11 +196,17 @@ export const SCHEDULE: ScheduleSlot[] = [
 ];
 
 export type WorkoutDay = "A" | "B";
+/** Habit that needs no tick on rest days (Sunday). */
+export const GYM_HABIT = "gym";
 export interface Exercise {
   name: string;
   sets: string;
 }
 
+/**
+ * LEGACY: the prototype's workout. Only used to read gym ticks from old
+ * prototype backups. The current sessions live in gym.ts.
+ */
 export const WORKOUT: Record<WorkoutDay, Exercise[]> = {
   A: [
     { name: "Goblet squats", sets: "3 × 10" },

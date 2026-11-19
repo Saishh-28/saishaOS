@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Block, WATER_MAX, WorkoutDay } from "./plan";
+import { Block, GYM_HABIT, WATER_MAX } from "./plan";
+import { ExerciseLog, GymSession, isSessionComplete } from "./gym";
 import {
   backupToImportPlan,
   buildPlanTasks,
   createDayLists,
   CUSTOM_SORT_BASE,
   DayLists,
-  gymKey,
-  isWorkoutComplete,
   parsePrototypeBackup,
   PlanTask,
   previousDate,
@@ -24,6 +23,7 @@ function cloneSnap(s: Snapshot): Snapshot {
     days: new Map(s.days),
     habits: new Map(s.habits),
     water: new Map(s.water),
+    exercises: new Map(s.exercises),
   };
 }
 
@@ -53,6 +53,10 @@ export function usePlanner(store: PlannerStore | null, today: string) {
   snapRef.current = snap;
 
   const loadGen = useRef(0);
+  // Writes in flight. A live-sync reload waits until they finish, so it can't
+  // briefly undo a tick that is still being saved.
+  const pending = useRef(0);
+  const reloadWanted = useRef(false);
 
   const reload = useCallback(async () => {
     if (!store) return;
@@ -71,7 +75,8 @@ export function usePlanner(store: PlannerStore | null, today: string) {
       if (gen !== loadGen.current) return;
       setSnap(s);
       setLoadedOn(today);
-      setError(null);
+      // A save error stays on screen after the reload that follows it; the
+      // Retry button (clearError + reload) dismisses it.
     } catch (e: any) {
       if (gen === loadGen.current) setError(e.message ?? String(e));
     }
@@ -93,15 +98,44 @@ export function usePlanner(store: PlannerStore | null, today: string) {
       const next = fn(snapRef.current);
       snapRef.current = next;
       setSnap(next);
+      pending.current++;
       try {
         await persist();
       } catch (e: any) {
         setError(e.message ?? String(e));
-        reload();
+        reloadWanted.current = true;
+      } finally {
+        pending.current--;
+        if (pending.current === 0 && reloadWanted.current) {
+          reloadWanted.current = false;
+          reload();
+        }
       }
     },
     [reload],
   );
+
+  // Live sync: another device changed something, so refetch (debounced).
+  useEffect(() => {
+    if (!store?.subscribe) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onChange = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (pending.current > 0) reloadWanted.current = true;
+        else reload();
+      }, 300);
+    };
+    const unsubscribe = store.subscribe(onChange);
+    // Also catch up when the app comes back to the foreground (phones pause sockets).
+    const onVisible = () => document.visibilityState === "visible" && onChange();
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [store, reload]);
 
   // First time a day is opened: roll over + fill to 5.
   useEffect(() => {
@@ -213,22 +247,32 @@ export function usePlanner(store: PlannerStore | null, today: string) {
       () => store.setHabit(date, key, done),
     );
 
-  /** Tick one exercise; when the whole workout is ticked, tick the gym habit too. Returns true if that happened. */
-  const toggleExercise = (w: WorkoutDay, i: number, checked: boolean): boolean => {
-    if (!store || !snap) return false;
-    const key = gymKey(w, i);
+  const exercisesFor = (date: string): Record<string, ExerciseLog> => snap?.exercises.get(date) ?? {};
+
+  /**
+   * Update one exercise / pose / cardio item for today. When this ticks the
+   * last item of today's session, the gym habit is ticked too.
+   * Returns true if that happened.
+   */
+  const setExercise = (session: GymSession, key: string, patch: Partial<ExerciseLog>): boolean => {
+    if (!store || !snapRef.current) return false;
     // Read the latest state (not this render's), so quick successive taps don't drop ticks.
-    const ticks = { ...(snapRef.current?.habits.get(today) ?? {}), [key]: checked };
-    const completes = checked && isWorkoutComplete(w, ticks) && !ticks.gym;
+    const cur = snapRef.current;
+    const todays = cur.exercises.get(today) ?? {};
+    const log: ExerciseLog = { done: false, sets: null, reps: null, weightKg: null, ...todays[key], ...patch };
+    const after = { ...todays, [key]: log };
+    const habits = cur.habits.get(today) ?? {};
+    const completes = !!patch.done && isSessionComplete(session, (k) => !!after[k]?.done) && !habits[GYM_HABIT];
     mutate(
       (s) => {
         const n = cloneSnap(s);
-        n.habits.set(today, completes ? { ...ticks, gym: true } : ticks);
+        n.exercises.set(today, after);
+        if (completes) n.habits.set(today, { ...habits, [GYM_HABIT]: true });
         return n;
       },
       async () => {
-        await store.setHabit(today, key, checked);
-        if (completes) await store.setHabit(today, "gym", true);
+        await store.setExercise(today, key, log);
+        if (completes) await store.setHabit(today, GYM_HABIT, true);
       },
     );
     return completes;
@@ -289,7 +333,8 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     addCustom,
     pull,
     setHabit,
-    toggleExercise,
+    exercisesFor,
+    setExercise,
     setWater,
     setNotes,
     importBackup,

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Saisha OS – Level up</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&amp;family=Nunito:wght@500;700;800&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#ffd98a}a:hover{color:#fff1c9}
+@keyframes rise{0%{transform:translateY(0) scale(1);opacity:0}15%{opacity:1}100%{transform:translateY(-420px) scale(.4);opacity:0}}
+@keyframes spin3d{0%{transform:perspective(600px) rotateY(-18deg) translateY(0)}50%{transform:perspective(600px) rotateY(18deg) translateY(-10px)}100%{transform:perspective(600px) rotateY(-18deg) translateY(0)}}
+@keyframes pulse{0%,100%{transform:scale(1);opacity:.75}50%{transform:scale(1.12);opacity:1}}
+@keyframes rays{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-8deg)}50%{transform:translateY(-12px) rotate(8deg)}}
+.pr{animation:rise 4.5s ease-in infinite}
+.cr{animation:spin3d 6s ease-in-out infinite}
+.pu{animation:pulse 3s ease-in-out infinite}
+.ra{animation:rays 30s linear infinite}
+.bo{animation:bob 3s ease-in-out infinite}
+</style>
+</helmet>
+<div style="width:390px;height:844px;position:relative;overflow:hidden;font-family:'Nunito',sans-serif;color:#f6f0ff;background:radial-gradient(circle at 50% 36%,#6b4bb0 0%,#2b1b63 42%,#0d0a2a 100%)">
+
+  <div class="ra" aria-hidden="true" style="position:absolute;left:-205px;top:-95px;width:800px;height:800px;border-radius:50%;background:repeating-conic-gradient(from 0deg,rgba(255,231,168,0.10) 0deg 6deg,rgba(255,231,168,0) 6deg 18deg);-webkit-mask-image:radial-gradient(circle,#000 18%,transparent 62%);mask-image:radial-gradient(circle,#000 18%,transparent 62%)"></div>
+
+  <sc-for list="{{parts}}" as="p" hint-placeholder-count="16">
+    <div class="pr" style="{{p.style}}"></div>
+  </sc-for>
+
+  <div style="position:relative;padding-top:58px;display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center">
+    <span style="font-size:13px;font-weight:800;letter-spacing:.2em;color:#bff3f0">THE CRYSTAL MOUNTAINS AWAKEN</span>
+    <h1 style="margin:0;font-family:'Fraunces',serif;font-size:44px;font-weight:700;line-height:1;color:#fff7e6;text-shadow:0 0 24px rgba(255,217,138,0.6)">Level up!</h1>
+  </div>
+
+  <div style="position:relative;margin:34px auto 0;width:220px;height:240px;display:flex;align-items:center;justify-content:center">
+    <div class="pu" aria-hidden="true" style="position:absolute;width:240px;height:240px;border-radius:50%;background:radial-gradient(closest-side,rgba(142,230,224,0.55),rgba(142,230,224,0))"></div>
+    <div class="cr">
+      <svg width="190" height="214" viewBox="0 0 190 214" role="img" aria-label="Strength Level 2 crest">
+        <defs>
+          <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#e9fbff"/><stop offset="55%" stop-color="#8ee6e0"/><stop offset="100%" stop-color="#5a7fd6"/></linearGradient>
+          <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#fff1c9"/><stop offset="100%" stop-color="#f2b98f"/></linearGradient>
+        </defs>
+        <path d="M95 6 L176 50 L176 132 Q176 176 95 208 Q14 176 14 132 L14 50 Z" fill="url(#rim)"/>
+        <path d="M95 20 L163 58 L163 130 Q163 166 95 194 Q27 166 27 130 L27 58 Z" fill="url(#cg)"/>
+        <path d="M58 140 L82 82 L95 108 L108 74 L134 140 Z" fill="#ffffff" opacity=".85"/>
+        <path d="M82 82 L90 102 L95 108 M108 74 L114 92" stroke="#8ee6e0" stroke-width="3" fill="none"/>
+        <text x="95" y="172" text-anchor="middle" font-family="Fraunces, serif" font-weight="700" font-size="26" fill="#2e2160">LV 2</text>
+      </svg>
+    </div>
+    <div class="bo" aria-hidden="true" style="position:absolute;right:-26px;top:8px">
+      <svg width="64" height="64" viewBox="0 0 100 100"><defs><radialGradient id="ll" cx="50%" cy="45%" r="55%"><stop offset="0%" stop-color="#fffbe9"/><stop offset="45%" stop-color="#ffe7a8"/><stop offset="100%" stop-color="#ffd98a" stop-opacity="0"/></radialGradient></defs><circle cx="50" cy="50" r="48" fill="url(#ll)"/><path d="M50 18 C54 38 62 46 82 50 C62 54 54 62 50 82 C46 62 38 54 18 50 C38 46 46 38 50 18 Z" fill="#fff6d6"/><path d="M41 49 Q44 45 47 49" stroke="#3b2a6b" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M53 49 Q56 45 59 49" stroke="#3b2a6b" stroke-width="2.4" fill="none" stroke-linecap="round"/><ellipse cx="50" cy="58" rx="4" ry="3.4" fill="#3b2a6b"/></svg>
+    </div>
+  </div>
+
+  <div style="position:relative;margin-top:22px;padding:0 28px;display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center">
+    <span style="font-family:'Fraunces',serif;font-size:22px;font-weight:700">Strength · Level 2</span>
+    <span style="font-size:15px;font-weight:700;color:#e3dafa;line-height:1.4">11 of 12 sessions in 4 weeks. Weight suggestions are now unlocked.</span>
+  </div>
+
+  <section aria-label="Reward unlocked" style="position:absolute;left:20px;right:20px;bottom:108px;display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:22px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,231,168,0.45);box-shadow:0 0 30px rgba(255,217,138,0.25), inset 0 1px 0 rgba(255,255,255,0.2)">
+    <svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true"><rect x="6" y="20" width="36" height="22" rx="4" fill="#c98a5a"/><path d="M6 20 Q24 4 42 20 Z" fill="#e2a873"/><rect x="21" y="18" width="6" height="12" rx="2" fill="#ffd98a"/><circle cx="16" cy="10" r="2" fill="#fff1c9"/><circle cx="33" cy="7" r="1.6" fill="#fff1c9"/><circle cx="24" cy="3" r="1.4" fill="#fff1c9"/></svg>
+    <div style="flex:1;display:flex;flex-direction:column;gap:2px">
+      <span style="font-size:12px;font-weight:800;letter-spacing:.08em;color:#ffe7b3">REWARD UNLOCKED</span>
+      <span style="font-family:'Fraunces',serif;font-size:17px;font-weight:700">Curly-hair specialist cut</span>
+      <span style="font-size:13px;font-weight:700;color:#e3dafa">Big reward · 4 weeks + Strength Lv 2 · +250 XP</span>
+    </div>
+  </section>
+
+  <div style="position:absolute;left:20px;right:20px;bottom:30px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+    <a href="Main.dc.html" style="min-height:52px;display:flex;align-items:center;justify-content:center;border-radius:26px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#f6f0ff;font-weight:800;font-size:15px;text-decoration:none">Back to kingdom</a>
+    <a href="Gym.dc.html" style="min-height:52px;display:flex;align-items:center;justify-content:center;border-radius:26px;background:linear-gradient(180deg,#ffe7a8,#f2b98f);color:#2e2160;font-weight:800;font-size:15px;text-decoration:none;box-shadow:0 5px 0 #b9776a">Claim reward</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var seed = 5;
+    function rnd() { seed = (seed * 9301 + 49297) % 233280; return seed / 233280; }
+    var colors = ['#ffe7a8', '#8ee6e0', '#ffc4d8', '#ffffff', '#d8c6ff'];
+    var parts = [];
+    for (var i = 0; i < 26; i++) {
+      var s = 3 + Math.round(rnd() * 4);
+      var c = colors[i % colors.length];
+      parts.push({ style: 'position:absolute;left:' + Math.round(rnd() * 380) + 'px;top:' + Math.round(520 + rnd() * 300) + 'px;width:' + s + 'px;height:' + s + 'px;border-radius:50%;background:' + c + ';box-shadow:0 0 10px 2px ' + c + ';animation-delay:' + (rnd() * 4.5).toFixed(2) + 's' });
+    }
+    return { parts: parts };
+  }
+}
+</script>
+</body>
+</html>

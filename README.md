@@ -19,11 +19,11 @@ Data syncs to Supabase when you're signed in, and falls back to `localStorage` w
 
 ## Tech stack
 
-- **Frontend:** React 19, TypeScript, Vite 6, Tailwind CSS 4 (dashboard), plain CSS (planner), installable PWA
+- **Frontend:** React 19, TypeScript, Vite 6, Tailwind CSS 4 (dashboard), plain CSS + Framer Motion + canvas-confetti (planner), installable PWA
 - **Backend:** one Cloudflare Worker ([`worker.ts`](worker.ts)) that serves the static build and the `/api/*` routes
 - **Database and auth:** Supabase (Postgres with Row Level Security on every table; Google and email sign-in)
 - **AI:** Google Gemini via `@google/genai`, called only from the Worker
-- **Tests:** Vitest (59 tests)
+- **Tests:** Vitest (74 tests)
 
 ## Project structure
 
@@ -34,6 +34,9 @@ src/App.tsx                    Saisha OS dashboard
 src/planner/                   Daily Planner
   plan.ts                      Plan data: phases, DEEP/STUDY queues, habits, schedule, workouts
   logic.ts                     Pure logic: rollover, fill to 5, gym rotation, CSV, backup import
+  gym.ts                       Gym sessions by weekday, yoga timer, weights, India time
+  sound.ts                     Sounds (Web Audio) and vibration, with settings
+  ui.tsx                       Enchanted Kingdom look: stars, Lumi, orb ticks, bouncy buttons
   validate.ts                  Anti-hallucination validation for AI plans
   report.ts                    Evening review report
   store.ts, usePlanner.ts      Supabase / localStorage persistence and state
@@ -107,7 +110,7 @@ In **Authentication → URL Configuration**:
 | `/planner` | Today: greeting, current schedule block, progress, up next |
 | `/planner/deep` | Deep work list (9–11 and 12–1) |
 | `/planner/study` | Course prep and career list (2:00–3:30) |
-| `/planner/gym` | Today's workout, or a rest day |
+| `/planner/gym` | Today's session: strength (Mon/Wed/Fri), cardio + core (Tue/Thu), yoga (Sat), rest (Sun) |
 | `/planner/habits` | Habits, water and the last 7 days |
 | `/planner/review` | Evening review, CSV export, prototype backup import |
 
@@ -118,7 +121,10 @@ Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at 
 - **First time a day is opened:** unfinished tasks from the most recent previous day are carried over (marked "↻ from yesterday"). The list is then filled from the plan queue, in order, up to 5 tasks. Only tasks whose phase has started and that aren't done are used.
 - **Your own actions:** tick a task done, remove it from today (plan tasks go back into the queue; your own tasks are deleted), add your own task, or **pull the next task** (from a future phase if the current one is empty).
 - **Habits:** water and skincare AM/PM share Sanctuary's `health_logs` rows, so both screens always show the same value. The other habits and gym ticks use `habit_logs`.
-- **Gym:** strength days are Mon/Wed/Fri. Odd ISO weeks are A, B, A; even ISO weeks are B, A, B. Ticking every exercise ticks the gym habit.
+- **Gym:** Mon/Wed/Fri strength (odd ISO weeks A, B, A; even ISO weeks B, A, B), Tue/Thu cardio + core, Sat yoga, Sun rest. Each strength exercise has an optional kg box and shows "Last: …" from the previous session. Each yoga pose has a Start button and a countdown that cues "switch sides" at half time. Ticking every item of the day's session ticks the gym habit. Sunday needs no gym tick (it isn't counted in progress, the CSV or the report).
+- **Time zone:** "today" is always India time (Asia/Kolkata), whatever the device is set to.
+- **Live sync:** the planner listens to Supabase Realtime, so a tick on the phone shows on the laptop within about a second. It also refetches when the app comes back to the foreground.
+- **Sounds:** the Nth tick of the day plays `tick-N` (6+ = `tick-6`), then `xp-sparkle`. A finished block plays `block-complete`, approving the evening review plays `good-night`, and the first tap before noon plays `wake-up` once a day. Nothing plays before the first tap. Sound on/off, volume (default 70%) and vibration are on the Review screen, saved per device.
 - **CSV** (`date, category, item, done`): a task counts as done (`1`) only on the day it was finished.
 - **Prototype backup import:** paste the old planner's "Copy backup" JSON on the Review screen. Days that already exist are kept, so it's safe to run twice.
 
@@ -130,7 +136,8 @@ Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at 
 | `planner_days` | Days that have been opened (so an emptied list isn't refilled), plus notes |
 | `daily_list_items` | Each day's deep/study list; the database refuses a task listed under the wrong block |
 | `task_completions` | Which tasks are done, and on which date |
-| `habit_logs` | Habits without an existing home, and gym exercise ticks |
+| `habit_logs` | Habits without an existing home (including the after-meal walks); old prototype gym ticks |
+| `exercise_logs` | Gym exercises, cardio items and yoga poses per day: done, sets, reps, optional weight |
 
 Every table has RLS: `auth.uid() = user_id` for both reads and writes. The app adds the plan tasks for a user the first time they open `/planner`.
 
@@ -155,6 +162,8 @@ Tests prove it: `src/planner/validate.test.ts` and `worker/planner/api.test.ts` 
 - **Legacy files.** [`server.ts`](server.ts) (old AI Studio Express server, `npm run dev:express-legacy`) and the Pages Functions layout in `functions/` are legacy. `functions/api/saisha/interact.ts` is still imported by `worker.ts` until it moves into `worker/`. `assets/.aistudio` and `metadata.json` are AI Studio leftovers.
 - **Approving tomorrow's list isn't atomic.** It's several Supabase calls; a failure halfway could leave a partial list. Approving again fixes it. A Postgres function would make it atomic.
 - **No offline mode.** There's no service worker yet, so the planner needs a connection.
+- **Realtime DELETE events aren't filtered by user.** Supabase can't filter deletes by column, so every signed-in client gets a "something was deleted" ping (with only the row's primary key) and refetches its own data through RLS. Fine for a personal app; revisit if more people use it.
+- **Reps aren't entered yet.** `exercise_logs.reps` stays empty until Phase 2 adds a reps input for double progression.
 - **No `@types/react`.** JSX is loosely typed, so type-checking catches less in components.
 - **Gemini free tier.** Heavy testing can exhaust the daily quota (429). The fallback model is only used for busy or timed-out errors.
 

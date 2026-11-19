@@ -2,8 +2,8 @@
  * Evening review report. Pure, shared by the Review screen and (Stage 3) the
  * Worker, which rebuilds it from the database rather than trusting the client.
  */
-import { BLOCKS, Block, HABITS, WATER_MAX } from "./plan";
-import { addDays, Completions, DayLists, PlanTask, queueFor, upcoming } from "./logic";
+import { BLOCKS, Block, WATER_MAX } from "./plan";
+import { addDays, Completions, DayLists, habitsOn, PlanTask, queueFor, upcoming } from "./logic";
 
 export interface ReportTask {
   id: string;
@@ -61,8 +61,8 @@ export function buildReport(args: {
     date,
     tomorrow,
     blocks,
-    habitsDone: HABITS.filter((h) => habits[h.key]).map((h) => h.label),
-    habitsMissed: HABITS.filter((h) => !habits[h.key]).map((h) => h.label),
+    habitsDone: habitsOn(date).filter((h) => habits[h.key]).map((h) => h.label),
+    habitsMissed: habitsOn(date).filter((h) => !habits[h.key]).map((h) => h.label),
     water: args.water,
     notes: (args.notes ?? "").trim(),
   };

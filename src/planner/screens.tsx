@@ -1,107 +1,138 @@
-import React, { useMemo, useState } from "react";
-import { Block, HABITS, SCHEDULE, WATER_MAX, WORKOUT } from "./plan";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Block, SCHEDULE, WATER_MAX } from "./plan";
 import {
+  addDays,
   csvRows,
   currentSlotIndex,
   dayOfWeek,
   dayProgress,
   formatTime,
-  gymKey,
+  habitsOn,
   phaseFor,
+  ticksOn,
   toCsv,
-  workoutFor,
-  addDays,
 } from "./logic";
+import {
+  bestWeightBefore,
+  formatClock,
+  formatKg,
+  GymItem,
+  GymSession,
+  lastWeight,
+  parseKg,
+  sessionFor,
+  timerSegments,
+  timerState,
+} from "./gym";
 import { buildReport, reportToText } from "./report";
 import type { NewAiTask, RejectedItem, ValidatedPlan } from "./validate";
 import { supabase } from "../supabase";
 import { Link, pathForView } from "./router";
 import type { Planner } from "./usePlanner";
+import { sfx } from "./sound";
+import { Btn, Lumi, Orb, Progress } from "./ui";
 
 export interface ScreenProps {
   p: Planner;
   today: string;
-  now: Date;
+  /** Minutes since midnight, India time. */
+  minutes: number;
   toast: (msg: string) => void;
 }
 
-const BLOCK_META: Record<Block, { title: string; pill: string; note: string }> = {
+const BLOCK_META: Record<Block, { title: string; pill: string; note: string; island: string }> = {
   deep: {
     title: "Deep work",
     pill: "9–11 · 12–1",
     note: "Phone in another room. One task at a time. Unfinished tasks roll over to tomorrow automatically.",
+    island: "Market Square",
   },
   study: {
     title: "Course prep & career",
     pill: "2:00–3:30",
     note: "Proofs: write every proof by hand. R: type the code yourself, don't copy-paste.",
+    island: "Library of Stars",
   },
 };
 
-function Progress({ pct }: { pct: number }) {
-  return (
-    <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-      <span style={{ width: `${pct}%` }} />
-    </div>
-  );
+/** Play the next rising note of the day. Call before the tick is applied. */
+function playTick(p: Planner, today: string) {
+  const n = ticksOn({ date: today, done: p.snap!.done, habits: p.habitsFor(today), exercises: p.exercisesFor(today) }) + 1;
+  sfx.tick(n);
 }
 
 /* ------------------------------------------------------------------ */
 /* Today                                                               */
 /* ------------------------------------------------------------------ */
 
-export function TodayScreen({ p, today, now }: ScreenProps) {
+function lumiLine(args: { pct: number; tasksLeft: number; habitsLeft: number; minutes: number; gym: GymSession; gymDone: boolean }) {
+  const { pct, tasksLeft, habitsLeft, minutes, gym, gymDone } = args;
+  const q = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  if (pct >= 100) return "Every quest is done. The whole kingdom is glowing tonight.";
+  if (minutes < 9 * 60 && gym.kind !== "rest" && !gymDone) return `${gym.title} first. The Crystal Mountains are waiting.`;
+  if (minutes >= 19 * 60 && tasksLeft) return `${q(tasksLeft, "quest")} left before the stars come out. You've got this!`;
+  if (!tasksLeft && habitsLeft) return `All quests done! Just ${q(habitsLeft, "habit")} to go.`;
+  return `${q(tasksLeft, "quest")} and ${q(habitsLeft, "habit")} to go today. One at a time.`;
+}
+
+export function TodayScreen({ p, today, minutes }: ScreenProps) {
   const habits = p.habitsFor(today);
   const snap = p.snap!;
-  const prog = dayProgress({ lists: p.lists, done: snap.done, habits, water: p.water });
-  const cur = currentSlotIndex(now.getHours() * 60 + now.getMinutes());
+  const prog = dayProgress({ lists: p.lists, done: snap.done, habits, water: p.water, date: today });
+  const cur = currentSlotIndex(minutes);
   const nextDeep = p.lists.deep.find((i) => !snap.done.has(i.taskId));
   const nextStudy = p.lists.study.find((i) => !snap.done.has(i.taskId));
-  const w = workoutFor(today);
-  const hdone = HABITS.filter((h) => habits[h.key]).length;
+  const gym = sessionFor(today);
+  const hs = habitsOn(today);
+  const hdone = hs.filter((h) => habits[h.key]).length;
+  const tasksLeft = [...p.lists.deep, ...p.lists.study].filter((i) => !snap.done.has(i.taskId)).length;
   const text = (id?: string) => (id ? p.tasksById.get(id)?.text ?? "(removed task)" : "");
 
   return (
     <>
+      <div className="lumi-row">
+        <div className="lumi-float">
+          <Lumi size={64} label="Lumi, your star spirit" />
+        </div>
+        <div className="bubble" role="status">
+          {lumiLine({ pct: prog.pct, tasksLeft, habitsLeft: hs.length - hdone, minutes, gym, gymDone: !!habits.gym })}
+        </div>
+      </div>
       <div className="card">
         <h2>
           Today's progress <span className="sub">{prog.pct}%</span>
         </h2>
-        <Progress pct={prog.pct} />
+        <Progress pct={prog.pct} label="Today's progress" />
         <div className="muted">Minimum for a bad day: one deep-work task. Never miss twice.</div>
       </div>
       <div className="card summary">
         <h2>
-          Up next <span className="sub">tap a block to open it</span>
+          Up next <span className="sub">tap to open</span>
         </h2>
-        <ul className="tasks">
+        <ul className="links">
           <li>
             <Link to="/planner/deep">
-              <b>🎯 Deep work</b>
-              <br />
-              <span className="muted">{nextDeep ? "Next: " + text(nextDeep.taskId) : "All done ✅"}</span>
+              <b>Deep work</b>
+              <span className="muted">{nextDeep ? "Next: " + text(nextDeep.taskId) : "All done ✨"}</span>
             </Link>
           </li>
           <li>
             <Link to="/planner/study">
-              <b>📚 Course prep</b>
-              <br />
-              <span className="muted">{nextStudy ? "Next: " + text(nextStudy.taskId) : "All done ✅"}</span>
+              <b>Course prep</b>
+              <span className="muted">{nextStudy ? "Next: " + text(nextStudy.taskId) : "All done ✨"}</span>
             </Link>
           </li>
           <li>
             <Link to="/planner/gym">
-              <b>💪 Gym</b>
-              <br />
-              <span className="muted">{w ? `Workout Day ${w}` : "Rest day: walk with Dad counts"}</span>
+              <b>Gym · {gym.title}</b>
+              <span className="muted">{gym.kind === "rest" ? "Steps only. Recover." : habits.gym ? "Done ✨" : gym.subtitle}</span>
             </Link>
           </li>
           <li>
             <Link to="/planner/habits">
-              <b>💧 Habits</b>
-              <br />
+              <b>Habits</b>
               <span className="muted">
-                {hdone}/{HABITS.length} habits · {p.water}/{WATER_MAX} glasses
+                {hdone}/{hs.length} habits · {p.water}/{WATER_MAX} glasses
               </span>
             </Link>
           </li>
@@ -146,6 +177,18 @@ export function BlockScreen({ p, today, toast, block }: ScreenProps & { block: B
   const doneCount = items.filter((i) => snap.done.has(i.taskId)).length;
   const meta = BLOCK_META[block];
 
+  const tick = (taskId: string, checked: boolean) => {
+    if (checked) {
+      playTick(p, today);
+      const left = items.filter((i) => i.taskId !== taskId && !snap.done.has(i.taskId)).length;
+      if (!left) {
+        sfx.blockComplete();
+        toast(`${meta.title}: every quest done ✨`);
+      }
+    }
+    p.toggleDone(taskId, checked);
+  };
+
   return (
     <>
       <div className="card">
@@ -153,48 +196,44 @@ export function BlockScreen({ p, today, toast, block }: ScreenProps & { block: B
           {meta.title} <span className="pill">{meta.pill}</span>
         </h2>
         <div className="muted">
-          Phase: {phaseFor(today).name} · {doneCount}/{items.length} done
+          Phase: {phaseFor(today).name} · {doneCount} of {items.length} done
         </div>
-        <Progress pct={items.length ? Math.round((doneCount / items.length) * 100) : 0} />
-        <ul className="tasks">
-          {!items.length && <li className="empty">Nothing left in the plan for today. Add your own task below. 🎉</li>}
-          {items.map((it) => {
-            const t = p.tasksById.get(it.taskId);
-            const done = snap.done.has(it.taskId);
-            return (
-              <li key={it.taskId} className={done ? "done" : ""}>
-                <label className="tick">
-                  <input
-                    type="checkbox"
-                    className="chk"
-                    checked={done}
-                    onChange={(e) => {
-                      p.toggleDone(it.taskId, e.target.checked);
-                      if (e.target.checked) toast("Nice! ✅");
-                    }}
-                  />
-                  <span className="txt">
-                    {it.carriedOver && <span className="carry">↻ from yesterday</span>}
-                    {t?.isAi && !t.text.startsWith("✨") && <span aria-label="Suggested by AI">✨ </span>}
-                    {t?.text ?? "(removed task)"}
-                  </span>
-                </label>
-                <button
-                  className="x"
-                  aria-label={`Remove "${t?.text ?? it.taskId}" from today`}
-                  onClick={() => {
-                    p.removeTask(block, it.taskId);
-                    toast(t?.isCustom ? "Task deleted" : "Moved off today, back in the plan");
-                  }}
-                >
-                  ×
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <Progress pct={items.length ? Math.round((doneCount / items.length) * 100) : 0} label={`${meta.title} progress`} />
+      </div>
+      <ul className="quests">
+        {!items.length && <li className="empty">Nothing left in the plan for today. Add your own quest below.</li>}
+        {items.map((it) => {
+          const t = p.tasksById.get(it.taskId);
+          const done = snap.done.has(it.taskId);
+          return (
+            <li key={it.taskId} className={"quest" + (done ? " done" : "")}>
+              <Orb checked={done} xp={10} label={(done ? "Completed: " : "Mark done: ") + (t?.text ?? it.taskId)} onChange={(v) => tick(it.taskId, v)} />
+              <div className="q-body">
+                {it.carriedOver && <span className="carry">FROM YESTERDAY</span>}
+                <span className="q-text">
+                  {t?.isAi && !t.text.startsWith("✨") && <span aria-label="Suggested by AI">✨ </span>}
+                  {t?.text ?? "(removed task)"}
+                </span>
+                <span className="q-meta">{meta.island}</span>
+              </div>
+              <button
+                className="x"
+                aria-label={`Remove "${t?.text ?? it.taskId}" from today`}
+                onClick={() => {
+                  p.removeTask(block, it.taskId);
+                  toast(t?.isCustom ? "Task deleted" : "Moved off today, back in the plan");
+                }}
+              >
+                ×
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="card">
         <form
           className="row"
+          style={{ marginTop: 0 }}
           onSubmit={(e) => {
             e.preventDefault();
             if (!draft.trim()) return;
@@ -204,24 +243,24 @@ export function BlockScreen({ p, today, toast, block }: ScreenProps & { block: B
         >
           <input
             type="text"
-            placeholder="Add a task…"
+            placeholder="Add a quest…"
             aria-label={`Add a ${meta.title.toLowerCase()} task`}
             value={draft}
             maxLength={500}
             onChange={(e) => setDraft(e.target.value)}
           />
-          <button className="btn">Add</button>
+          <Btn className="btn">Add</Btn>
         </form>
         <div className="row">
-          <button
-            className="btn ghost wide"
+          <Btn
+            className="btn dashed wide"
             onClick={() => {
               const r = p.pull(block);
-              toast(r.added ? (r.early ? "Pulled from the next phase" : "Added from the plan") : "Plan is empty 🎉");
+              toast(r.added ? (r.early ? "Pulled from the next phase" : "Added from the plan") : "Plan is empty ✨");
             }}
           >
-            + Pull next task from the plan
-          </button>
+            + Summon the next quest from the plan
+          </Btn>
         </div>
       </div>
       <div className="note">{meta.note}</div>
@@ -233,53 +272,240 @@ export function BlockScreen({ p, today, toast, block }: ScreenProps & { block: B
 /* Gym                                                                 */
 /* ------------------------------------------------------------------ */
 
+const WEEK_LETTERS = ["M", "T", "W", "T", "F", "S", "S"];
+const KIND_SHORT: Record<GymSession["kind"], string> = { strength: "Lift", cardio: "Cardio", yoga: "Yoga", rest: "Rest" };
+
+function Crystals({ lit, total }: { lit: number; total: number }) {
+  const n = Math.max(total, 1);
+  return (
+    <div className="mountain" aria-hidden="true">
+      <div className="peak" />
+      {Array.from({ length: n }, (_, i) => {
+        const x = 14 + (i * 92) / Math.max(n - 1, 1);
+        const y = 52 - Math.sin((i / Math.max(n - 1, 1)) * Math.PI) * 38;
+        return <i key={i} className={"crystal" + (i < lit ? " lit" : "")} style={{ left: x, top: y }} />;
+      })}
+    </div>
+  );
+}
+
+function WeekStrip({ p, today }: { p: Planner; today: string }) {
+  const monday = addDays(today, -((dayOfWeek(today) + 6) % 7));
+  return (
+    <div className="weekstrip" aria-label="This week">
+      {WEEK_LETTERS.map((l, i) => {
+        const d = addDays(monday, i);
+        const s = sessionFor(d);
+        const done = !!p.habitsFor(d).gym;
+        const state = done ? "done" : d === today ? "today" : s.kind === "rest" ? "rest" : d < today ? "missed" : "plan";
+        return (
+          <div key={d} className="wd">
+            <span className="l">{l}</span>
+            <div className={"wbox " + state} title={`${d}: ${s.title}${done ? " (done)" : ""}`}>
+              <span>{KIND_SHORT[s.kind]}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function KgInput({ item, value, onSave }: { item: GymItem; value: number | null; onSave: (kg: number | null) => boolean }) {
+  const [text, setText] = useState(value == null ? "" : String(value));
+  useEffect(() => setText(value == null ? "" : String(value)), [value]);
+  return (
+    <label className="kg">
+      <span className="sr">Weight for {item.name}, kg</span>
+      <input
+        type="text"
+        inputMode="decimal"
+        placeholder="–"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={() => {
+          if (!onSave(text === "" ? null : (parseKg(text) as any))) setText(value == null ? "" : String(value));
+        }}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+      />
+      kg
+    </label>
+  );
+}
+
+/** Countdown for one yoga pose. Uses timestamps, so it stays right if the phone lags. */
+function YogaTimerPanel({ item, onFinish, onStop }: { item: GymItem; onFinish: () => void; onStop: () => void }) {
+  const segs = useMemo(() => timerSegments(item.timer!), [item]);
+  const [startAt, setStartAt] = useState(() => Date.now());
+  const [pausedAt, setPausedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const lastIdx = useRef(0);
+  const finished = useRef(false);
+
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 250);
+    // Keep the screen on during the pose.
+    let lock: any = null;
+    (navigator as any).wakeLock?.request?.("screen").then((l: any) => (lock = l)).catch(() => {});
+    return () => {
+      clearInterval(id);
+      lock?.release?.().catch?.(() => {});
+    };
+  }, []);
+
+  const elapsed = ((pausedAt ?? now) - startAt) / 1000;
+  const st = timerState(segs, elapsed);
+  const seg = segs[st.index];
+
+  useEffect(() => {
+    if (st.finished) {
+      if (!finished.current) {
+        finished.current = true;
+        sfx.done();
+        onFinish();
+      }
+    } else if (st.index !== lastIdx.current) {
+      lastIdx.current = st.index;
+      sfx.cue();
+    }
+  }, [st.index, st.finished]);
+
+  const segPct = seg ? Math.round(((seg.seconds - st.remaining) / seg.seconds) * 100) : 100;
+  return (
+    <div className={"timer" + (seg?.rest ? " rest" : "")}>
+      <div className="t-label" aria-live="polite">
+        {st.finished ? "Done. Lovely." : seg.label}
+      </div>
+      <div className="t-clock" role="timer" aria-label={`${st.remaining} seconds left`}>
+        {formatClock(st.remaining)}
+      </div>
+      <Progress pct={st.finished ? 100 : segPct} label="Pose progress" />
+      <div className="row">
+        {!st.finished && (
+          <Btn
+            className="btn ghost"
+            onClick={() => {
+              if (pausedAt == null) setPausedAt(Date.now());
+              else {
+                setStartAt((s) => s + (Date.now() - pausedAt));
+                setPausedAt(null);
+              }
+            }}
+          >
+            {pausedAt == null ? "Pause" : "Resume"}
+          </Btn>
+        )}
+        <Btn className="btn ghost" onClick={onStop}>
+          {st.finished ? "Close" : "Stop"}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
 export function GymScreen({ p, today, toast }: ScreenProps) {
-  const w = workoutFor(today);
-  const ticks = p.habitsFor(today);
-  if (!w) {
-    return (
-      <>
-        <div className="card">
-          <h2>Rest / active recovery day</h2>
-          <div className="muted">Your walk with Dad counts. Optional: 10 min stretching + plank 3 × 30 s.</div>
-        </div>
-        <div className="note">Strength days are Monday, Wednesday and Friday.</div>
-      </>
-    );
-  }
+  const session = sessionFor(today);
+  const logs = p.exercisesFor(today);
+  const all = p.snap!.exercises;
+  const [active, setActive] = useState<string | null>(null);
+  const doneCount = session.items.filter((i) => logs[i.key]?.done).length;
+  const habits = p.habitsFor(today);
+
+  const tick = (item: GymItem, checked: boolean) => {
+    if (checked) playTick(p, today);
+    const completed = p.setExercise(session, item.key, { done: checked, sets: item.sets ?? null });
+    if (completed) {
+      sfx.blockComplete();
+      toast(`${session.title} done. Gym habit ticked ✨`);
+    }
+  };
+
   return (
     <>
-      <div className="card">
-        <h2>
-          Workout Day {w} <span className="pill">{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][dayOfWeek(today)]}</span>
-        </h2>
-        <div className="muted">Full body · ~45 min · tick each exercise as you finish it</div>
-        <ul className="tasks">
-          {WORKOUT[w].map((ex, i) => {
-            const on = !!ticks[gymKey(w, i)];
+      <div className="card gym-hero">
+        <Crystals lit={doneCount} total={session.items.length || 5} />
+        <div className="gh-body">
+          <span className="eyebrow">{session.subtitle.toUpperCase()}</span>
+          <h2 style={{ margin: 0 }}>{session.title}</h2>
+          {session.kind === "rest" ? (
+            <span className="muted">Steps only. Recover.</span>
+          ) : (
+            <>
+              <span className="muted">
+                {doneCount} of {session.items.length} {session.kind === "yoga" ? "poses" : "crystals"} lit today
+              </span>
+              <Progress pct={Math.round((doneCount / session.items.length) * 100)} label="Session progress" />
+            </>
+          )}
+        </div>
+      </div>
+      <WeekStrip p={p} today={today} />
+
+      {session.kind === "rest" && (
+        <div className="lumi-row">
+          <div className="lumi-float">
+            <Lumi size={64} mood="happy" />
+          </div>
+          <div className="bubble">Rest day. Steps only. Recover. Your muscles grow while you rest.</div>
+        </div>
+      )}
+
+      {session.items.length > 0 && (
+        <ul className="quests">
+          {session.items.map((item) => {
+            const log = logs[item.key];
+            const done = !!log?.done;
+            const last = item.weighted ? lastWeight(all, item.key, today) : null;
+            const best = item.weighted ? bestWeightBefore(all, item.key, today) : null;
+            const pb = log?.weightKg != null && best != null && log.weightKg > best;
             return (
-              <li key={i} className={on ? "done" : ""}>
-                <label className="tick">
-                  <input
-                    type="checkbox"
-                    className="chk"
-                    checked={on}
-                    onChange={(e) => {
-                      if (p.toggleExercise(w, i, e.target.checked)) toast("Workout done 💪");
+              <li key={item.key} className={"quest" + (done ? " done" : "")}>
+                <Orb checked={done} label={(done ? "Done: " : "Mark done: ") + item.name} onChange={(v) => tick(item, v)} />
+                <div className="q-body">
+                  <span className="q-text">{item.name}</span>
+                  {item.tip && <span className="tip">{item.tip}</span>}
+                  <span className="q-meta">
+                    {item.plan}
+                    {item.weighted && ` · Last: ${last ? formatKg(last.weightKg) : "–"}`}
+                  </span>
+                </div>
+                {pb && <span className="chip gold">NEW BEST</span>}
+                {item.weighted && (
+                  <KgInput
+                    item={item}
+                    value={log?.weightKg ?? null}
+                    onSave={(kg) => {
+                      if ((kg as any) === "invalid") {
+                        toast("Weight should be a number like 22.5");
+                        return false;
+                      }
+                      if (kg !== (log?.weightKg ?? null)) p.setExercise(session, item.key, { weightKg: kg, sets: item.sets ?? null });
+                      return true;
                     }}
                   />
-                  <span className="txt ex">
-                    <b>{ex.name}</b>
-                    <span className="muted">{ex.sets}</span>
-                  </span>
-                </label>
+                )}
+                {item.timer && active !== item.key && (
+                  <Btn className="btn ghost start" onClick={() => setActive(item.key)} aria-label={`Start ${item.name}`}>
+                    Start
+                  </Btn>
+                )}
+                {item.timer && active === item.key && (
+                  <YogaTimerPanel
+                    item={item}
+                    onFinish={() => !done && tick(item, true)}
+                    onStop={() => setActive(null)}
+                  />
+                )}
               </li>
             );
           })}
         </ul>
-        {ticks.gym && <div className="note">Gym habit ticked for today ✅</div>}
-      </div>
-      <div className="note">Add a little weight or one more rep each week. Rest 60–90 s between sets.</div>
+      )}
+      {habits.gym && session.kind !== "rest" && <div className="note">Gym habit ticked for today ✨</div>}
+      {session.kind === "strength" && (
+        <div className="note">Add a little weight or one more rep each week. Rest 60–90 s between sets.</div>
+      )}
+      {session.kind === "yoga" && <div className="note">Tap Start on a pose. You'll hear a soft chime to switch sides and when it's done.</div>}
     </>
   );
 }
@@ -292,6 +518,7 @@ export function HabitsScreen({ p, today }: ScreenProps) {
   const habits = p.habitsFor(today);
   const snap = p.snap!;
   const week = Array.from({ length: 7 }, (_, k) => addDays(today, k - 6));
+  const list = habitsOn(today);
   return (
     <>
       <div className="card">
@@ -303,7 +530,7 @@ export function HabitsScreen({ p, today }: ScreenProps) {
         </h2>
         <div className="water" role="group" aria-label="Glasses of water">
           {Array.from({ length: WATER_MAX }, (_, k) => k + 1).map((i) => (
-            <button
+            <Btn
               key={i}
               className={i <= p.water ? "on" : ""}
               aria-label={`${i} glass${i > 1 ? "es" : ""}`}
@@ -316,22 +543,28 @@ export function HabitsScreen({ p, today }: ScreenProps) {
           Shared with Sanctuary.
         </div>
       </div>
-      <div className="card">
-        <h2>Habits</h2>
-        <ul className="tasks">
-          {HABITS.map((h) => {
-            const on = !!habits[h.key];
-            return (
-              <li key={h.key} className={on ? "done" : ""}>
-                <label className="tick">
-                  <input type="checkbox" className="chk" checked={on} onChange={(e) => p.setHabit(h.key, e.target.checked)} />
-                  <span className="txt">{h.label}</span>
-                </label>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
+      <h2 className="section">Habits</h2>
+      <ul className="quests">
+        {list.map((h) => {
+          const on = !!habits[h.key];
+          return (
+            <li key={h.key} className={"quest" + (on ? " done" : "")}>
+              <Orb
+                checked={on}
+                xp={5}
+                label={(on ? "Done: " : "Mark done: ") + h.label}
+                onChange={(v) => {
+                  if (v) playTick(p, today);
+                  p.setHabit(h.key, v);
+                }}
+              />
+              <div className="q-body">
+                <span className="q-text">{h.label}</span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
       <div className="card">
         <h2>
           Last 7 days <span className="sub">habits done</span>
@@ -340,18 +573,16 @@ export function HabitsScreen({ p, today }: ScreenProps) {
           {week.map((d) => {
             const hs = snap.habits.get(d);
             const known = !!hs || snap.days.has(d);
-            const cnt = hs ? HABITS.filter((h) => hs[h.key]).length : 0;
-            const ratio = cnt / HABITS.length;
+            const of = habitsOn(d);
+            const cnt = hs ? of.filter((h) => hs[h.key]).length : 0;
+            const ratio = cnt / of.length;
             return (
               <div key={d}>
                 {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"][dayOfWeek(d)]}
                 <div
-                  className="dot"
-                  title={`${d}: ${cnt}/${HABITS.length}`}
-                  style={{
-                    background: known ? `rgba(63,143,107,${0.15 + ratio * 0.85})` : undefined,
-                    color: ratio > 0.5 ? "#fff" : undefined,
-                  }}
+                  className={"dot" + (d === today ? " today" : "")}
+                  title={`${d}: ${cnt}/${of.length}`}
+                  style={{ background: known ? `rgba(142,230,224,${0.12 + ratio * 0.75})` : undefined, color: ratio > 0.55 ? "#1d1546" : undefined }}
                 >
                   {known ? cnt : "–"}
                 </div>
@@ -361,6 +592,50 @@ export function HabitsScreen({ p, today }: ScreenProps) {
         </div>
       </div>
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Sound settings                                                      */
+/* ------------------------------------------------------------------ */
+
+function useSoundSettings() {
+  const [s, setS] = useState(sfx.settings);
+  useEffect(() => sfx.subscribe(() => setS(sfx.settings)), []);
+  return s;
+}
+
+export function SoundCard() {
+  const s = useSoundSettings();
+  return (
+    <div className="card">
+      <h2>Sound & vibration</h2>
+      <label className="switch">
+        <input type="checkbox" checked={s.sound} onChange={(e) => sfx.update({ sound: e.target.checked })} />
+        <span>Sounds</span>
+      </label>
+      <label className="slider">
+        <span>Volume {Math.round(s.volume * 100)}%</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={5}
+          value={Math.round(s.volume * 100)}
+          disabled={!s.sound}
+          onChange={(e) => sfx.update({ volume: Number(e.target.value) / 100 })}
+        />
+      </label>
+      <label className="switch">
+        <input type="checkbox" checked={s.vibrate} onChange={(e) => sfx.update({ vibrate: e.target.checked })} />
+        <span>Vibration</span>
+      </label>
+      <div className="row">
+        <Btn className="btn ghost" onClick={() => sfx.tick(1)}>
+          Test sound
+        </Btn>
+      </div>
+    </div>
   );
 }
 
@@ -412,7 +687,7 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
     <>
       <div className="card">
         <h2>
-          🤖 Evening review <span className="pill">8:30 pm</span>
+          Evening review <span className="pill">8:30 pm</span>
         </h2>
         <p className="muted" style={{ marginTop: 0 }}>
           Tonight's report: what you ticked, what you didn't, and the next tasks in your plan, each with its ID.
@@ -460,7 +735,7 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
           );
         })}
         <div className="muted">
-          Habits {report.habitsDone.length}/{HABITS.length} · water {report.water}/{WATER_MAX}
+          Habits {report.habitsDone.length}/{report.habitsDone.length + report.habitsMissed.length} · water {report.water}/{WATER_MAX}
           {report.habitsMissed.length ? ` · missed: ${report.habitsMissed.join("; ")}` : ""}
         </div>
         <label className="muted" htmlFor="review-notes" style={{ display: "block", marginTop: 12 }}>
@@ -492,6 +767,8 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
         </div>
         <AiPlanner p={p} today={today} notes={notes} toast={toast} />
       </div>
+
+      <SoundCard />
 
       <div className="card">
         <h2>Export for Python</h2>
@@ -650,7 +927,8 @@ function AiPlanner({ p, today, notes, toast }: { p: Planner; today: string; note
           (r.saved.new ? `, including ${r.saved.new} new ✨ task(s).` : ".") +
           (r.rejected.length ? ` ${r.rejected.length} item(s) were no longer valid and were skipped.` : ""),
       });
-      toast("Tomorrow is planned ✅");
+      sfx.goodNight();
+      toast("Tomorrow is planned. Good night ✨");
       p.reload();
     } catch (e: any) {
       setResult({ ok: false, text: e.message });
@@ -697,7 +975,7 @@ function AiPlanner({ p, today, notes, toast }: { p: Planner; today: string; note
         </div>
       )}
       {preview && (
-        <div className="note" style={{ background: "#fff", border: "1px solid var(--line)" }}>
+        <div className="note preview">
           <b>Preview for {preview.tomorrow}</b> <span className="muted">· {preview.model}</span>
           {preview.tomorrowHasList && <div className="note error">Tomorrow already has a list. Approving replaces it.</div>}
           <div style={{ marginTop: 8 }}>

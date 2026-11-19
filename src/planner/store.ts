@@ -8,6 +8,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { toUUID } from "../supabaseSync";
 import { Block, HABITS, WATER_METRIC } from "./plan";
 import { DayLists, ImportPlan, ListItem, PlanTask } from "./logic";
+import type { ExerciseLog } from "./gym";
 
 export interface DayRecord {
   lists: DayLists;
@@ -21,6 +22,7 @@ export interface Snapshot {
   days: Map<string, DayRecord>;
   habits: Map<string, Record<string, boolean>>; // date -> habit key / gym tick -> done
   water: Map<string, number>; // date -> glasses
+  exercises: Map<string, Record<string, ExerciseLog>>; // date -> exercise_key -> log
 }
 
 export interface PlannerStore {
@@ -37,9 +39,24 @@ export interface PlannerStore {
   /** Habits, skincare (routed to health_logs) and gym ticks (habit_logs). */
   setHabit(date: string, key: string, done: boolean): Promise<void>;
   setWater(date: string, glasses: number): Promise<void>;
+  /** Gym exercises, cardio items and yoga poses (exercise_logs). */
+  setExercise(date: string, key: string, log: ExerciseLog): Promise<void>;
   setNotes(date: string, notes: string | null): Promise<void>;
   importBackup(plan: ImportPlan): Promise<void>;
+  /** Live sync: call `onChange` when another device changes this user's data. Returns unsubscribe. */
+  subscribe?(onChange: () => void): () => void;
 }
+
+/** Tables the planner reads; changes to any of them trigger a refetch. */
+export const LIVE_TABLES = [
+  "plan_tasks",
+  "planner_days",
+  "daily_list_items",
+  "task_completions",
+  "habit_logs",
+  "exercise_logs",
+  "health_logs",
+] as const;
 
 export const emptySnapshot = (): Snapshot => ({
   tasks: [],
@@ -47,6 +64,7 @@ export const emptySnapshot = (): Snapshot => ({
   days: new Map(),
   habits: new Map(),
   water: new Map(),
+  exercises: new Map(),
 });
 
 /** Habit keys stored in Sanctuary's health_logs instead of habit_logs. */
@@ -88,7 +106,7 @@ export class SupabaseStore implements PlannerStore {
 
   async load(): Promise<Snapshot> {
     const uid = this.userId;
-    const [tasks, days, items, done, habits, health] = await Promise.all([
+    const [tasks, days, items, done, habits, health, exercises] = await Promise.all([
       this.sb.from("plan_tasks").select("*").eq("user_id", uid),
       this.sb.from("planner_days").select("*").eq("user_id", uid),
       this.sb.from("daily_list_items").select("*").eq("user_id", uid).order("position"),
@@ -99,6 +117,7 @@ export class SupabaseStore implements PlannerStore {
         .select("metric,value,logged_at")
         .eq("user_id", uid)
         .in("metric", [WATER_METRIC, ...HEALTH_METRIC_BY_KEY.values()]),
+      this.sb.from("exercise_logs").select("date,exercise_key,done,sets,reps,weight_kg").eq("user_id", uid),
     ]);
     for (const [r, what] of [
       [tasks, "plan_tasks"],
@@ -109,6 +128,9 @@ export class SupabaseStore implements PlannerStore {
       [health, "health_logs"],
     ] as const)
       check(r, `Loading ${what}`);
+    // Gym logs are optional for loading: if the exercise_logs migration hasn't
+    // run yet, the rest of the planner still works (saving a gym tick will say so).
+    if (exercises.error) console.warn("[planner] exercise_logs unavailable:", exercises.error.message);
 
     const snap = emptySnapshot();
     snap.tasks = (tasks.data ?? []).map((r: any) => ({
@@ -134,6 +156,13 @@ export class SupabaseStore implements PlannerStore {
         if (key) setIn(snap.habits, date, key, r.value === "true");
       }
     }
+    for (const r of exercises.data ?? [])
+      setIn(snap.exercises, r.date, r.exercise_key, {
+        done: r.done,
+        sets: r.sets,
+        reps: r.reps,
+        weightKg: r.weight_kg == null ? null : Number(r.weight_kg),
+      });
     return snap;
   }
 
@@ -235,11 +264,42 @@ export class SupabaseStore implements PlannerStore {
     check(await this.sb.from("health_logs").upsert(healthRow(this.userId, date, WATER_METRIC, String(glasses), "cups")), "Saving water");
   }
 
+  async setExercise(date: string, key: string, log: ExerciseLog) {
+    check(
+      await this.sb.from("exercise_logs").upsert({
+        user_id: this.userId,
+        date,
+        exercise_key: key,
+        done: log.done,
+        sets: log.sets,
+        reps: log.reps,
+        weight_kg: log.weightKg,
+      }),
+      "Saving exercise",
+    );
+  }
+
   async setNotes(date: string, notes: string | null) {
     check(
       await this.sb.from("planner_days").update({ notes }).eq("user_id", this.userId).eq("date", date),
       "Saving notes",
     );
+  }
+
+  subscribe(onChange: () => void): () => void {
+    // RLS applies to Realtime, so only this user's changes arrive. DELETE events
+    // can't be filtered by column, so the user_id filter is applied to the
+    // others and DELETEs (e.g. an untick) are listened to on their own.
+    let ch = this.sb.channel(`planner-${this.userId}-${Math.random().toString(36).slice(2, 8)}`);
+    for (const table of LIVE_TABLES) {
+      for (const event of ["INSERT", "UPDATE"] as const)
+        ch = ch.on("postgres_changes" as any, { event, schema: "public", table, filter: `user_id=eq.${this.userId}` }, onChange);
+      ch = ch.on("postgres_changes" as any, { event: "DELETE", schema: "public", table }, onChange);
+    }
+    ch.subscribe();
+    return () => {
+      this.sb.removeChannel(ch);
+    };
   }
 
   async importBackup(plan: ImportPlan) {
@@ -301,6 +361,7 @@ type Serialized = {
   days: [string, DayRecord][];
   habits: [string, Record<string, boolean>][];
   water: [string, number][];
+  exercises?: [string, Record<string, ExerciseLog>][];
 };
 
 export class LocalStore implements PlannerStore {
@@ -320,6 +381,7 @@ export class LocalStore implements PlannerStore {
           days: new Map(s.days),
           habits: new Map(s.habits),
           water: new Map(s.water),
+          exercises: new Map(s.exercises ?? []),
         };
       }
     } catch (e) {
@@ -335,6 +397,7 @@ export class LocalStore implements PlannerStore {
       days: [...this.snap.days],
       habits: [...this.snap.habits],
       water: [...this.snap.water],
+      exercises: [...this.snap.exercises],
     };
     this.storage.setItem(LOCAL_KEY, JSON.stringify(s));
   }
@@ -380,6 +443,10 @@ export class LocalStore implements PlannerStore {
   }
   async setWater(date: string, glasses: number) {
     this.snap.water.set(date, glasses);
+    this.save();
+  }
+  async setExercise(date: string, key: string, log: ExerciseLog) {
+    setIn(this.snap.exercises, date, key, log);
     this.save();
   }
   async setNotes(date: string, notes: string | null) {
