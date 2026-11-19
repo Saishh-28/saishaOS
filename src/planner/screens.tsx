@@ -573,6 +573,7 @@ interface ReviewResponse {
   date: string;
   tomorrow: string;
   tomorrowHasList: boolean;
+  model: string;
   plan: ValidatedPlan;
 }
 
@@ -697,7 +698,7 @@ function AiPlanner({ p, today, notes, toast }: { p: Planner; today: string; note
       )}
       {preview && (
         <div className="note" style={{ background: "#fff", border: "1px solid var(--line)" }}>
-          <b>Preview for {preview.tomorrow}</b>
+          <b>Preview for {preview.tomorrow}</b> <span className="muted">· {preview.model}</span>
           {preview.tomorrowHasList && <div className="note error">Tomorrow already has a list. Approving replaces it.</div>}
           <div style={{ marginTop: 8 }}>
             <b>🎯 Deep</b>

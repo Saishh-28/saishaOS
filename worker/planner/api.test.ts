@@ -27,7 +27,7 @@ function fakeDeps(geminiReply: string | (() => string) = "{}") {
   const deps: PlannerDeps = {
     verifyUser: vi.fn(async (t: string) => (t === "good-token" ? "user-1" : null)),
     loadData: vi.fn(async () => data()),
-    askGemini: vi.fn(async () => (typeof geminiReply === "function" ? geminiReply() : geminiReply)),
+    askGemini: vi.fn(async () => ({ text: typeof geminiReply === "function" ? geminiReply() : geminiReply, model: "test-model" })),
     saveTomorrow: vi.fn(async (_u: string, req: SaveRequest) => {
       saved.push(req);
     }),
