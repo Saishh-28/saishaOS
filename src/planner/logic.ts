@@ -8,6 +8,8 @@ import {
   Block,
   DAILY_TARGET,
   DEEP,
+  GYM_HABIT,
+  Habit,
   HABITS,
   PHASES,
   Phase,
@@ -264,6 +266,28 @@ export function isWorkoutComplete(w: WorkoutDay, ticks: Readonly<Record<string, 
   return WORKOUT[w].every((_, i) => !!ticks[gymKey(w, i)]);
 }
 
+/** Habits that apply on `date`. Sunday is a rest day, so the gym habit needs no tick. */
+export function habitsOn(date: string): Habit[] {
+  return dayOfWeek(date) === 0 ? HABITS.filter((h) => h.key !== GYM_HABIT) : HABITS;
+}
+
+/**
+ * Everything ticked on `date`: tasks finished that day, habits, exercises.
+ * The next tick plays note number ticksOn(...) + 1 (see sound.ts).
+ */
+export function ticksOn(args: {
+  date: string;
+  done: Completions;
+  habits: Readonly<Record<string, boolean>>;
+  exercises: Readonly<Record<string, { done: boolean }>>;
+}): number {
+  let n = 0;
+  for (const d of args.done.values()) if (d === args.date) n++;
+  n += Object.values(args.habits).filter(Boolean).length;
+  n += Object.values(args.exercises).filter((e) => e.done).length;
+  return n;
+}
+
 /* ------------------------------------------------------------------ */
 /* Today view                                                          */
 /* ------------------------------------------------------------------ */
@@ -299,11 +323,14 @@ export function dayProgress(args: {
   done: Completions;
   habits: Readonly<Record<string, boolean>>;
   water: number;
+  /** When given, only the habits that apply on that date count (see habitsOn). */
+  date?: string;
 }): { done: number; total: number; pct: number } {
+  const habits = args.date ? habitsOn(args.date) : HABITS;
   const ids = [...args.lists.deep, ...args.lists.study].map((i) => i.taskId);
   const tdone = ids.filter((id) => args.done.has(id)).length;
-  const hdone = HABITS.filter((h) => args.habits[h.key]).length;
-  const total = ids.length + HABITS.length + 1;
+  const hdone = habits.filter((h) => args.habits[h.key]).length;
+  const total = ids.length + habits.length + 1;
   const doneAll = tdone + hdone + (args.water >= WATER_MAX ? 1 : 0);
   return { done: doneAll, total, pct: Math.round((doneAll / total) * 100) };
 }
@@ -335,7 +362,7 @@ export function csvRows(days: readonly CsvDay[], tasksById: ReadonlyMap<string, 
           rows.push([d.date, b, tasksById.get(item.taskId)?.text ?? "(removed task)", doneDate && doneDate <= d.date ? 1 : 0]);
         }
       }
-      for (const h of HABITS) rows.push([d.date, "habit", h.label, d.habits[h.key] ? 1 : 0]);
+      for (const h of habitsOn(d.date)) rows.push([d.date, "habit", h.label, d.habits[h.key] ? 1 : 0]);
       rows.push([d.date, "water", "glasses", d.water || 0]);
     });
   return rows;
