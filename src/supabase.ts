@@ -17,10 +17,12 @@ if (!supabase) {
 /**
  * Trigger Supabase Sign In with Google
  */
-export async function signInWithGoogle() {
+export async function signInWithGoogle(returnPath = "/") {
   if (!supabase) throw new Error("Supabase is not configured.");
 
-  const redirectUrl = window.location.origin;
+  // Must be allowed in Supabase > Authentication > URL Configuration > Redirect URLs,
+  // otherwise Supabase silently falls back to the project's Site URL.
+  const redirectUrl = window.location.origin + returnPath;
   const isIframe = typeof window !== "undefined" && window.self !== window.top;
   console.log("[signInWithGoogle] Initiating Google OAuth with redirectUrl:", redirectUrl, "isIframe:", isIframe);
 

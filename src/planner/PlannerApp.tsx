@@ -108,12 +108,11 @@ function SignIn() {
           </div>
         </form>
         <div className="row">
-          <button className="btn ghost wide" onClick={() => signInWithGoogle().catch((e) => setMsg(e.message))}>
+          <button className="btn ghost wide" onClick={() => signInWithGoogle(window.location.pathname).catch((e) => setMsg(e.message))}>
             Continue with Google
           </button>
         </div>
-        <p className="muted">Google sign-in returns you to the Saisha OS home page. Open the planner again afterwards.</p>
-        {msg && <div className="note error">{msg}</div>}
+                {msg && <div className="note error">{msg}</div>}
       </div>
     </div>
   );
