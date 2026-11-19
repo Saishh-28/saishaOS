@@ -13,6 +13,8 @@ import {
   addDays,
 } from "./logic";
 import { buildReport, reportToText } from "./report";
+import type { NewAiTask, RejectedItem, ValidatedPlan } from "./validate";
+import { supabase } from "../supabase";
 import { Link, pathForView } from "./router";
 import type { Planner } from "./usePlanner";
 
@@ -173,6 +175,7 @@ export function BlockScreen({ p, today, toast, block }: ScreenProps & { block: B
                   />
                   <span className="txt">
                     {it.carriedOver && <span className="carry">↻ from yesterday</span>}
+                    {t?.isAi && !t.text.startsWith("✨") && <span aria-label="Suggested by AI">✨ </span>}
                     {t?.text ?? "(removed task)"}
                   </span>
                 </label>
@@ -487,7 +490,7 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
             Copy report
           </button>
         </div>
-        <div className="note">AI planning for tomorrow arrives in the next stage.</div>
+        <AiPlanner p={p} today={today} notes={notes} toast={toast} />
       </div>
 
       <div className="card">
@@ -559,5 +562,170 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
         )}
       </div>
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* AI planning for tomorrow                                            */
+/* ------------------------------------------------------------------ */
+
+interface ReviewResponse {
+  date: string;
+  tomorrow: string;
+  tomorrowHasList: boolean;
+  plan: ValidatedPlan;
+}
+
+async function plannerApi<T>(path: string, body: unknown): Promise<T> {
+  const token = supabase ? (await supabase.auth.getSession()).data.session?.access_token : null;
+  if (!token) throw new Error("Sign in to use the AI review.");
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+  return data as T;
+}
+
+function Rejected({ items }: { items: RejectedItem[] }) {
+  if (!items.length) return <div className="muted">No made-up or invalid items ✅</div>;
+  return (
+    <details open>
+      <summary className="muted" style={{ minHeight: 44, display: "flex", alignItems: "center", cursor: "pointer" }}>
+        Rejected {items.length} item{items.length > 1 ? "s" : ""}
+      </summary>
+      <ul className="tasks">
+        {items.map((r, i) => (
+          <li key={i} style={{ padding: "6px 0" }}>
+            <span className="txt">
+              <code className="id">{r.item}</code> <span className="muted">· {r.reason}</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function AiPlanner({ p, today, notes, toast }: { p: Planner; today: string; notes: string; toast: (m: string) => void }) {
+  const [busy, setBusy] = useState<"" | "plan" | "save">("");
+  const [preview, setPreview] = useState<ReviewResponse | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const plan = async () => {
+    setBusy("plan");
+    setResult(null);
+    setPreview(null);
+    try {
+      if (notes !== (p.day?.notes ?? "")) await p.setNotes(notes);
+      setPreview(await plannerApi<ReviewResponse>("/api/planner/review", { date: today, notes }));
+    } catch (e: any) {
+      setResult({ ok: false, text: e.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const approve = async () => {
+    if (!preview) return;
+    setBusy("save");
+    try {
+      const r = await plannerApi<{ saved: { date: string; deep: number; study: number; new: number }; rejected: RejectedItem[] }>(
+        "/api/planner/review/approve",
+        {
+          date: today,
+          deep: preview.plan.lists.deep.map((t) => t.id),
+          study: preview.plan.lists.study.map((t) => t.id),
+          new: preview.plan.newTasks,
+        },
+      );
+      setPreview(null);
+      setResult({
+        ok: true,
+        text:
+          `Saved ${r.saved.deep} deep + ${r.saved.study} study task(s) for ${r.saved.date}` +
+          (r.saved.new ? `, including ${r.saved.new} new ✨ task(s).` : ".") +
+          (r.rejected.length ? ` ${r.rejected.length} item(s) were no longer valid and were skipped.` : ""),
+      });
+      toast("Tomorrow is planned ✅");
+      p.reload();
+    } catch (e: any) {
+      setResult({ ok: false, text: e.message });
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const list = (b: Block, newTasks: NewAiTask[]) => (
+    <ul className="tasks">
+      {preview!.plan.lists[b].map((t) => (
+        <li key={t.id} style={{ padding: "6px 0" }}>
+          <span className="txt">
+            {t.text} <code className="id">{t.id}</code>
+          </span>
+        </li>
+      ))}
+      {newTasks
+        .filter((n) => n.block === b)
+        .map((n, i) => (
+          <li key={"n" + i} style={{ padding: "6px 0" }}>
+            <span className="txt">
+              ✨ {n.text}
+              {n.reason && <span className="muted"> · {n.reason}</span>}
+            </span>
+          </li>
+        ))}
+      {!preview!.plan.lists[b].length && !newTasks.some((n) => n.block === b) && <li className="empty">Nothing proposed.</li>}
+    </ul>
+  );
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <b>Plan tomorrow with Gemini</b>
+      <p className="muted" style={{ marginTop: 4 }}>
+        Gemini can only pick task IDs from the report above. The server checks every ID against your plan and drops anything
+        made up. Nothing is saved until you tap Approve.
+      </p>
+      {!preview && (
+        <div className="row">
+          <button className="btn wide" disabled={!!busy} onClick={plan}>
+            {busy === "plan" ? "Asking Gemini…" : "🤖 Plan tomorrow"}
+          </button>
+        </div>
+      )}
+      {preview && (
+        <div className="note" style={{ background: "#fff", border: "1px solid var(--line)" }}>
+          <b>Preview for {preview.tomorrow}</b>
+          {preview.tomorrowHasList && <div className="note error">Tomorrow already has a list. Approving replaces it.</div>}
+          <div style={{ marginTop: 8 }}>
+            <b>🎯 Deep</b>
+            {list("deep", preview.plan.newTasks)}
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <b>📚 Study</b>
+            {list("study", preview.plan.newTasks)}
+          </div>
+          <div style={{ marginTop: 8 }}>
+            <Rejected items={preview.plan.rejected} />
+          </div>
+          {preview.plan.note && <p style={{ marginBottom: 0 }}>💬 {preview.plan.note}</p>}
+          <div className="row">
+            <button className="btn" disabled={!!busy} onClick={approve}>
+              {busy === "save" ? "Saving…" : "Approve"}
+            </button>
+            <button className="btn ghost" disabled={!!busy} onClick={() => setPreview(null)}>
+              Discard
+            </button>
+          </div>
+        </div>
+      )}
+      {result && (
+        <div className={"note" + (result.ok ? "" : " error")} role="status">
+          {result.text}
+        </div>
+      )}
+    </div>
   );
 }

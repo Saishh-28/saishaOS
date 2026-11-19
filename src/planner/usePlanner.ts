@@ -44,6 +44,10 @@ export interface ImportSummary {
 export function usePlanner(store: PlannerStore | null, today: string) {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The day the current snapshot was loaded for. A new day always reloads from
+  // the database first, so a list approved last night (AI review) is used as-is
+  // instead of being merged with an automatic rollover.
+  const [loadedOn, setLoadedOn] = useState<string | null>(null);
   const creating = useRef(new Set<string>());
   const snapRef = useRef<Snapshot | null>(null);
   snapRef.current = snap;
@@ -66,14 +70,18 @@ export function usePlanner(store: PlannerStore | null, today: string) {
       }
       if (gen !== loadGen.current) return;
       setSnap(s);
+      setLoadedOn(today);
       setError(null);
     } catch (e: any) {
       if (gen === loadGen.current) setError(e.message ?? String(e));
     }
-  }, [store]);
+  }, [store, today]);
 
   useEffect(() => {
     setSnap(null);
+  }, [store]);
+
+  useEffect(() => {
     creating.current.clear();
     reload();
   }, [reload]);
@@ -97,7 +105,7 @@ export function usePlanner(store: PlannerStore | null, today: string) {
 
   // First time a day is opened: roll over + fill to 5.
   useEffect(() => {
-    if (!store || !snap || snap.days.has(today) || creating.current.has(today)) return;
+    if (!store || !snap || loadedOn !== today || snap.days.has(today) || creating.current.has(today)) return;
     creating.current.add(today);
     const prevDate = previousDate(snap.days.keys(), today);
     const lists = createDayLists({
@@ -114,7 +122,7 @@ export function usePlanner(store: PlannerStore | null, today: string) {
       },
       () => store.createDay(today, lists),
     );
-  }, [store, snap, today, mutate]);
+  }, [store, snap, loadedOn, today, mutate]);
 
   const day: DayRecord | undefined = snap?.days.get(today);
   const tasksById = new Map<string, PlanTask>((snap?.tasks ?? []).map((t) => [t.id, t] as const));
