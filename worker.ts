@@ -1,11 +1,21 @@
+/**
+ * Saisha OS production entry point (Cloudflare Workers with static assets).
+ * This file is what runs in production AND in local dev (`npm run dev`,
+ * via @cloudflare/vite-plugin).
+ *
+ * Routes:
+ *   POST /api/planner/review, /api/planner/review/approve → Daily Planner AI review (worker/planner)
+ *   POST /api/saisha/interact → AI chat (implemented in functions/api/saisha/interact.ts)
+ *   GET  /api/health
+ *   everything else → static assets from the Vite build, with SPA fallback to index.html
+ *     (assets.not_found_handling = "single-page-application"), so deep links such as
+ *     /planner/deep load the app directly.
+ */
 import { onRequestPost } from "./functions/api/saisha/interact";
+import { handlePlannerApi } from "./worker/planner/api";
+import { makePlannerDeps, PlannerEnv } from "./worker/planner/deps";
 
-interface Env {
-  GEMINI_API_KEY?: string;
-  SUPABASE_URL?: string;
-  VITE_SUPABASE_URL?: string;
-  SUPABASE_ANON_KEY?: string;
-  VITE_SUPABASE_ANON_KEY?: string;
+interface Env extends PlannerEnv {
   ASSETS?: {
     fetch: (request: Request) => Promise<Response>;
   };
@@ -20,7 +30,14 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
-    // Route API requests to the Gemini + Supabase backend
+    // Daily Planner API (auth-checked, Gemini evening review)
+    if (url.pathname.startsWith("/api/planner/")) {
+      const auth = request.headers.get("Authorization") ?? "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
+      return handlePlannerApi(request, url.pathname, makePlannerDeps(env, token));
+    }
+
+    // Route API requests to the Gemini + Supabase chat backend
     if (url.pathname === "/api/saisha/interact") {
       if (request.method === "POST") {
         const context: any = {
@@ -44,6 +61,14 @@ export default {
     if (url.pathname === "/api/health") {
       return new Response(JSON.stringify({ status: "ok" }), {
         status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Unknown API paths should be a JSON 404, not the SPA's index.html
+    if (url.pathname.startsWith("/api/")) {
+      return new Response(JSON.stringify({ error: "Not found" }), {
+        status: 404,
         headers: { "Content-Type": "application/json" },
       });
     }
