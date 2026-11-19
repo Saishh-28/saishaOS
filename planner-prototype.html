@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1f3a3d">
+<title>Saish's Summer Planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f1ea; --card:#fffdf9; --ink:#1d2a2c; --muted:#6b7577;
+    --line:#e6ddd1; --teal:#1f3a3d; --accent:#d9643a; --soft:#f3e3d6;
+    --ok:#3f8f6b; --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:"DM Sans",system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:16px;line-height:1.45}
+  header{background:var(--teal);color:#fff;padding:20px 18px 64px}
+  header .date{opacity:.75;font-size:14px}
+  header h1{font-family:Fraunces,Georgia,serif;font-weight:600;font-size:26px;margin:4px 0 2px}
+  header .now{font-size:15px;opacity:.9}
+  main{max-width:640px;margin:-48px auto 0;padding:0 14px 110px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:16px;margin-bottom:14px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card h2{font-size:17px;margin:0 0 10px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .card h2 .sub{font-weight:400;color:var(--muted);font-size:13px}
+  .pill{display:inline-block;background:var(--soft);color:var(--accent);border-radius:99px;
+    padding:2px 10px;font-size:12px;font-weight:700}
+  ul.tasks{list-style:none;margin:0;padding:0}
+  ul.tasks li{display:flex;align-items:flex-start;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+  ul.tasks li:first-child{border-top:none}
+  ul.tasks li.done .txt{text-decoration:line-through;color:var(--muted)}
+  .chk{appearance:none;-webkit-appearance:none;width:24px;height:24px;flex:0 0 24px;margin:0;
+    border:2px solid #b8aea2;border-radius:7px;cursor:pointer;display:grid;place-items:center;background:#fff}
+  .chk:checked{background:var(--ok);border-color:var(--ok)}
+  .chk:checked::after{content:"";width:6px;height:11px;border:solid #fff;border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+  .txt{flex:1;padding-top:1px}
+  .carry{font-size:11px;color:var(--accent);font-weight:700;display:block}
+  .x{background:none;border:none;color:#b0a79c;font-size:20px;line-height:1;cursor:pointer;padding:0 4px}
+  .row{display:flex;gap:8px;margin-top:10px}
+  input[type=text],textarea{flex:1;border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+    font:inherit;background:#fff;color:var(--ink);min-width:0}
+  textarea{width:100%;min-height:90px;font-size:13px;font-family:ui-monospace,Menlo,monospace}
+  button.btn{border:none;border-radius:12px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer;
+    background:var(--teal);color:#fff;white-space:nowrap}
+  button.btn.ghost{background:var(--soft);color:var(--accent)}
+  .progress{height:8px;background:var(--line);border-radius:99px;overflow:hidden;margin:2px 0 6px}
+  .progress span{display:block;height:100%;background:var(--ok);transition:width .3s}
+  .muted{color:var(--muted);font-size:13px}
+  .timeline .slot{display:flex;gap:12px;padding:8px 10px;border-radius:12px}
+  .timeline .slot .t{width:52px;flex:0 0 52px;color:var(--muted);font-weight:700;font-size:14px}
+  .timeline .slot.current{background:var(--soft)}
+  .timeline .slot.current .t{color:var(--accent)}
+  .timeline .slot.past{opacity:.5}
+  .water{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+  .water button{width:34px;height:40px;border-radius:8px 8px 12px 12px;border:2px solid #9fc3d6;background:#fff;cursor:pointer}
+  .water button.on{background:#9fc3d6}
+  .ex{display:flex;justify-content:space-between;gap:10px}
+  .ex b{font-weight:700}
+  .week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center;font-size:12px;color:var(--muted)}
+  .week .dot{height:34px;border-radius:10px;background:var(--line);display:grid;place-items:center;color:var(--ink);font-weight:700;font-size:12px}
+  nav{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:1px solid var(--line);
+    display:flex;justify-content:space-around;padding:6px 4px calc(8px + env(safe-area-inset-bottom))}
+  nav a{flex:1;text-align:center;text-decoration:none;color:var(--muted);font-size:11px;font-weight:700;padding:4px 0}
+  nav a .ic{display:block;font-size:20px;line-height:1.3}
+  nav a.active{color:var(--accent)}
+  .view{display:none}
+  .view.show{display:block}
+  .note{background:var(--soft);border-radius:12px;padding:10px 12px;font-size:14px;margin-top:10px}
+  .toast{position:fixed;left:50%;bottom:86px;transform:translateX(-50%);background:var(--teal);color:#fff;
+    padding:10px 16px;border-radius:12px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none}
+  .toast.on{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <div class="date" id="hdrDate"></div>
+  <h1 id="hdrTitle">Good morning, Saish</h1>
+  <div class="now" id="hdrNow"></div>
+</header>
+
+<main>
+  <!-- TODAY -->
+  <section class="view" id="v-today">
+    <div class="card">
+      <h2>Today's progress <span class="sub" id="todayPct"></span></h2>
+      <div class="progress"><span id="todayBar" style="width:0"></span></div>
+      <div class="muted" id="todayMin">Minimum for a bad day: one deep-work task. Never miss twice.</div>
+    </div>
+    <div class="card">
+      <h2>Up next <span class="sub">tap a block to open it</span></h2>
+      <div id="todaySummary"></div>
+    </div>
+    <div class="card timeline">
+      <h2>Schedule</h2>
+      <div id="timeline"></div>
+    </div>
+  </section>
+
+  <!-- DEEP WORK -->
+  <section class="view" id="v-deep">
+    <div class="card">
+      <h2>Deep work <span class="pill">9–11 · 12–1</span></h2>
+      <div class="muted" id="deepPhase"></div>
+      <div class="progress"><span id="deepBar"></span></div>
+      <ul class="tasks" id="deepList"></ul>
+      <form class="row" data-block="deep"><input type="text" placeholder="Add a task…"><button class="btn">Add</button></form>
+      <div class="row"><button class="btn ghost" data-pull="deep">+ Pull next task from the plan</button></div>
+    </div>
+    <div class="note">Phone in another room. One task at a time. Unfinished tasks roll over to tomorrow automatically.</div>
+  </section>
+
+  <!-- COURSE PREP -->
+  <section class="view" id="v-study">
+    <div class="card">
+      <h2>Course prep &amp; career <span class="pill">2:00–3:30</span></h2>
+      <div class="muted" id="studyPhase"></div>
+      <div class="progress"><span id="studyBar"></span></div>
+      <ul class="tasks" id="studyList"></ul>
+      <form class="row" data-block="study"><input type="text" placeholder="Add a task…"><button class="btn">Add</button></form>
+      <div class="row"><button class="btn ghost" data-pull="study">+ Pull next task from the plan</button></div>
+    </div>
+    <div class="note">Proofs: write every proof by hand. R: type the code yourself, don't copy-paste.</div>
+  </section>
+
+  <!-- GYM -->
+  <section class="view" id="v-gym">
+    <div class="card">
+      <h2 id="gymTitle">Workout</h2>
+      <div class="muted" id="gymSub"></div>
+      <ul class="tasks" id="gymList"></ul>
+    </div>
+    <div class="note">Add a little weight or one more rep each week. Rest 60–90 s between sets.</div>
+  </section>
+
+  <!-- HABITS -->
+  <section class="view" id="v-habits">
+    <div class="card">
+      <h2>Water <span class="sub" id="waterCount"></span></h2>
+      <div class="water" id="water"></div>
+    </div>
+    <div class="card">
+      <h2>Habits</h2>
+      <ul class="tasks" id="habitList"></ul>
+    </div>
+    <div class="card">
+      <h2>Last 7 days <span class="sub">habits done</span></h2>
+      <div class="week" id="week"></div>
+    </div>
+  </section>
+
+  <!-- DATA -->
+  <section class="view" id="v-data">
+    <div class="card">
+      <h2>🤖 Evening review with Claude <span class="pill">8:30 pm</span></h2>
+      <p class="muted"><b>Step 1.</b> Copy tonight's report and paste it into Claude. It contains exactly what you ticked, what you didn't, and the next tasks in your plan, each with an ID.</p>
+      <div class="row"><button class="btn" id="copyReport">Copy report for Claude</button></div>
+      <textarea id="reportBox" readonly></textarea>
+      <p class="muted" style="margin-top:14px"><b>Step 2.</b> Paste Claude's reply below and tap Import. The app only accepts task IDs that really exist in your plan. Anything new must start with <code>NEW:</code> and gets a ✨ so you can see it wasn't from the plan.</p>
+      <textarea id="importBox" placeholder="DEEP: deep-2026-11-23-0&#10;DEEP: NEW: Call Sharma & Co CA&#10;STUDY: study-2026-11-23-2"></textarea>
+      <div class="row"><button class="btn" id="importBtn">Import as tomorrow's lists</button></div>
+      <div class="note" id="importResult" style="display:none"></div>
+    </div>
+    <div class="card">
+      <h2>Export for Python</h2>
+      <p class="muted">Every tick is saved with its date. Copy this CSV into a file (e.g. <code>habits.csv</code>) and load it with pandas for your Sunday review.</p>
+      <div class="row"><button class="btn" id="copyCsv">Copy CSV</button></div>
+      <textarea id="csvBox" readonly></textarea>
+    </div>
+    <div class="card">
+      <h2>Backup</h2>
+      <p class="muted">Data lives only in this browser on this phone. Copy a backup every Sunday and paste it in a note.</p>
+      <div class="row"><button class="btn" id="copyBackup">Copy backup</button><button class="btn ghost" id="restoreBtn">Restore</button></div>
+      <textarea id="backupBox" placeholder="Paste a backup here, then tap Restore"></textarea>
+    </div>
+  </section>
+</main>
+
+<nav>
+  <a href="#today" data-v="today"><span class="ic">☀️</span>Today</a>
+  <a href="#deep" data-v="deep"><span class="ic">🎯</span>Deep</a>
+  <a href="#study" data-v="study"><span class="ic">📚</span>Study</a>
+  <a href="#gym" data-v="gym"><span class="ic">💪</span>Gym</a>
+  <a href="#habits" data-v="habits"><span class="ic">💧</span>Habits</a>
+  <a href="#data" data-v="data"><span class="ic">🤖</span>AI &amp; Data</a>
+</nav>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------------- PLAN DATA (edit freely) ---------------- */
+const PHASES = [
+  {start:"2026-11-19", name:"Setup days"},
+  {start:"2026-11-23", name:"Learn GST + talk to customers"},
+  {start:"2026-12-07", name:"Build version 1"},
+  {start:"2027-01-04", name:"Pilots with 3 users"},
+  {start:"2027-02-01", name:"First paying customer + write-up"},
+];
+
+const DEEP = {
+  "2026-11-19":[
+    "Oppo: allow MacroDroid background activity + auto-launch + lock in recents",
+    "Set scheduled power off 21:30 / on 6:55 and test it",
+    "Make Spotify playlists: morning, gym, focus, sleep",
+    "Build MacroDroid macros (morning, focus, evening)",
+    "Host this planner on GitHub Pages and add it to home screen",
+    "Put up vision board on the wall"],
+  "2026-11-23":[
+    "GST: watch ClearTax 'GST Basics' videos",
+    "GST: learn what a GSTIN is + registration basics",
+    "GST: input tax credit videos (part 1)",
+    "GST: input tax credit videos (part 2)",
+    "GST portal tutorials: GSTR-1, GSTR-2B, GSTR-3B, IMS",
+    "Explain GST to Dad using the shirt example",
+    "Write down 10 GST questions you still have",
+    "Ask the family CA if you can shadow them",
+    "Dad: check Optum outside-business policy",
+    "List 15 CA firms + shop owners to interview",
+    "Write CA interview questions",
+    "Customer interviews 1–3",
+    "Customer interviews 4–6",
+    "Customer interviews 7–10",
+    "Shadow CA: day 1 notes",
+    "Shadow CA: day 2 notes",
+    "Try competitors: ClearTax + Zoho Books",
+    "Try competitors: Tally + Vyapar",
+    "Write a 1-page findings summary",
+    "Decide with Dad: customer, first feature, success metric"],
+  "2026-12-07":[
+    "Get anonymised invoices + GSTR-2B from pilot firm",
+    "Python: load GSTR-2B data into pandas",
+    "Python: extract invoice fields from PDFs/photos with an LLM",
+    "Build exact invoice matching",
+    "Add fuzzy matching (INV-044 vs 44)",
+    "Generate mismatch report (CSV/Excel)",
+    "Draft supplier WhatsApp message templates",
+    "Agent loop: detect mismatch → message supplier → follow up",
+    "Test on one full month of pilot data",
+    "Demo v1 to pilot firm, note feedback",
+    "Fix top 3 feedback issues"],
+  "2027-01-04":[
+    "Onboard pilot firm 2",
+    "Onboard pilot firm 3",
+    "Measure time before vs after for each pilot",
+    "Set up WhatsApp Business API account",
+    "Weekly pilot check-ins",
+    "Collect pilot testimonials"],
+  "2027-02-01":[
+    "Decide pricing with Dad",
+    "Ask pilots to convert to paid",
+    "Set things up so you can run it from NZ",
+    "Write GitHub README with screenshots",
+    "Record 2-minute demo video",
+    "Write LinkedIn post",
+    "Update resume with real numbers"],
+};
+
+const STUDY = {
+  "2026-11-19":[
+    "Email COMPSCI 130 coordinator about tutoring",
+    "Save CV + transcript as PDFs"],
+  "2026-11-23":[
+    "Update resume",
+    "Update LinkedIn",
+    "Book of Proof ch.1 (+3 exercises)",
+    "Learn: call an LLM API from Python",
+    "Book of Proof ch.2 (+3 exercises)",
+    "Learn: tool use / function calling",
+    "Book of Proof ch.3 (+3 exercises)",
+    "Build a tiny agent in Python",
+    "Book of Proof ch.4 (+3 exercises)",
+    "Book of Proof ch.5 (+3 exercises)",
+    "Book of Proof ch.6 (+3 exercises)"],
+  "2026-12-07":[
+    "Install R + RStudio",
+    "R4DS: data visualisation with ggplot2 (part 1)",
+    "R4DS: ggplot2 (part 2)",
+    "R4DS: dplyr filter + arrange",
+    "R4DS: dplyr mutate + summarise + group_by",
+    "R4DS: importing CSV / JSON",
+    "R4DS: make your first Quarto report",
+    "Mini-project: habit data → 2 charts → Quarto report",
+    "Check uni email for maths dept tutor invitation"],
+  "2027-01-04":[
+    "3Blue1Brown Essence of Calculus ep. 1–4",
+    "3Blue1Brown Essence of Calculus ep. 5–8",
+    "3Blue1Brown Essence of Calculus ep. 9–12",
+    "Stat 110 lectures 1–2",
+    "Stat 110 lectures 3–4",
+    "Stat 110 lectures 5–6",
+    "LeetCode: 3 easy problems (week 1)",
+    "LeetCode: 3 easy problems (week 2)",
+    "LeetCode: 3 easy problems (week 3)"],
+  "2027-02-01":[
+    "COMPSCI 220 textbook ch.1 (Big-O)",
+    "Mark Wilson COMPSCI 220 videos (first few)",
+    "COMPSCI 220 textbook ch.2",
+    "LeetCode: 3 problems",
+    "UoA Scientific handover plan",
+    "Pack for NZ (fly 20 Feb)"],
+};
+
+const HABITS = [
+  ["gym","Gym / workout (or stretch on rest days)"],
+  ["walk","11 am walk with Dad"],
+  ["steps","10k steps"],
+  ["skinAM","Skincare AM"],
+  ["skinPM","Skincare PM"],
+  ["protein","Protein at every meal"],
+  ["teach","Teach brother (5–6:30)"],
+  ["read","Read 20 pages (Deep Work)"],
+  ["phone","Phone away by 9:30"],
+];
+
+const SCHEDULE = [
+  ["07:00","Wake up, water, sunlight, skincare",null],
+  ["07:30","Gym","gym"],
+  ["08:30","Breakfast with protein",null],
+  ["09:00","Deep work 1","deep"],
+  ["11:00","Walk with Dad (~7k steps)","habits"],
+  ["12:00","Deep work 2","deep"],
+  ["13:00","Lunch + water",null],
+  ["14:00","Course prep & career","study"],
+  ["15:30","Free time / rest",null],
+  ["17:00","Teach your brother",null],
+  ["18:30","Evening steps, reading","habits"],
+  ["21:00","Sleep playlist, skincare",null],
+  ["21:30","Phone off",null],
+  ["22:00","Sleep",null],
+];
+
+const WORKOUT = {
+  A:[["Goblet squats","3 × 10"],["Dumbbell rows","3 × 10"],["Push-ups (knees ok)","3 × 8–12"],["Hip thrusts","3 × 12"],["Plank","3 × 30 s"]],
+  B:[["Romanian deadlifts","3 × 10"],["Shoulder press","3 × 10"],["Lunges","3 × 10 each leg"],["Lat pulldown","3 × 10"],["Dead bugs","3 × 10"]],
+};
+
+/* ---------------- STORAGE ---------------- */
+const KEY = "saish-planner-v1";
+let mem = null;
+function load(){
+  try{ const s = localStorage.getItem(KEY); if(s) return JSON.parse(s); }catch(e){}
+  return mem || {days:{}, done:{}, custom:{}};
+}
+function save(){
+  mem = state;
+  try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){}
+}
+let state = load();
+
+/* ---------------- HELPERS ---------------- */
+const $ = s => document.querySelector(s);
+const pad = n => String(n).padStart(2,"0");
+function ymd(d){ return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate()); }
+function today(){ return ymd(new Date()); }
+function esc(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function toast(msg){ const t=$("#toast"); t.textContent=msg; t.classList.add("on"); setTimeout(()=>t.classList.remove("on"),1600); }
+
+// Build an ordered queue of plan tasks with stable ids
+function buildQueue(src, block){
+  const q=[];
+  Object.keys(src).sort().forEach(start=>{
+    src[start].forEach((text,i)=>q.push({id:block+"-"+start+"-"+i, text, start, block}));
+  });
+  return q;
+}
+const QUEUE = {deep:buildQueue(DEEP,"deep"), study:buildQueue(STUDY,"study")};
+function taskText(id){
+  if(state.custom[id]) return state.custom[id].text;
+  for(const b of ["deep","study"]){ const t=QUEUE[b].find(x=>x.id===id); if(t) return t.text; }
+  return "(removed task)";
+}
+function phaseFor(date){
+  let p=PHASES[0]; PHASES.forEach(x=>{ if(x.start<=date) p=x; }); return p;
+}
+
+// Create today's lists: roll over unfinished tasks, then fill from the plan up to 5
+function ensureDay(date){
+  if(state.days[date]) return state.days[date];
+  const prevKey = Object.keys(state.days).filter(k=>k<date).sort().pop();
+  const prev = prevKey ? state.days[prevKey] : null;
+  const day = {deep:[], study:[], carried:[], habits:{}, water:0};
+  ["deep","study"].forEach(b=>{
+    if(prev && prev[b]) prev[b].forEach(id=>{ if(!state.done[id] && (state.custom[id] || QUEUE[b].some(t=>t.id===id))){ day[b].push(id); day.carried.push(id);} });
+    fill(day,b,date,5);
+  });
+  state.days[date]=day; save(); return day;
+}
+function fill(day,b,date,target){
+  for(const t of QUEUE[b]){
+    if(day[b].length>=target) break;
+    if(t.start<=date && !state.done[t.id] && !day[b].includes(t.id)) day[b].push(t.id);
+  }
+}
+
+/* ---------------- RENDER ---------------- */
+function renderTasks(b){
+  const date=today(), day=ensureDay(date), ul=$("#"+b+"List");
+  ul.innerHTML="";
+  if(!day[b].length){ ul.innerHTML='<li class="muted">Nothing left in the plan for today. Add your own task below. 🎉</li>'; }
+  day[b].forEach(id=>{
+    const done=!!state.done[id];
+    const li=document.createElement("li"); if(done) li.className="done";
+    li.innerHTML=`<input type="checkbox" class="chk" ${done?"checked":""} aria-label="done"><span class="txt">${day.carried.includes(id)?'<span class="carry">↻ from yesterday</span>':""}${esc(taskText(id))}</span><button class="x" aria-label="remove">×</button>`;
+    li.querySelector(".chk").onchange=e=>{
+      if(e.target.checked){ state.done[id]=date; toast("Nice! ✅"); } else delete state.done[id];
+      save(); renderAll();
+    };
+    li.querySelector(".x").onclick=()=>{
+      day[b]=day[b].filter(x=>x!==id);
+      if(state.custom[id]) delete state.custom[id];
+      save(); renderAll(); toast("Moved off today");
+    };
+    ul.appendChild(li);
+  });
+  const n=day[b].length, d=day[b].filter(id=>state.done[id]).length;
+  $("#"+b+"Bar").style.width=(n?Math.round(d/n*100):0)+"%";
+  $("#"+b+"Phase").textContent=`Phase: ${phaseFor(date).name} · ${d}/${n} done`;
+}
+
+function renderHabits(){
+  const day=ensureDay(today());
+  const ul=$("#habitList"); ul.innerHTML="";
+  HABITS.forEach(([k,label])=>{
+    const on=!!day.habits[k];
+    const li=document.createElement("li"); if(on) li.className="done";
+    li.innerHTML=`<input type="checkbox" class="chk" ${on?"checked":""}><span class="txt">${esc(label)}</span>`;
+    li.querySelector(".chk").onchange=e=>{ day.habits[k]=e.target.checked; save(); renderAll(); };
+    ul.appendChild(li);
+  });
+  const w=$("#water"); w.innerHTML="";
+  for(let i=1;i<=8;i++){
+    const btn=document.createElement("button"); btn.className=i<=day.water?"on":""; btn.setAttribute("aria-label",i+" glasses");
+    btn.onclick=()=>{ day.water = day.water===i ? i-1 : i; save(); renderAll(); };
+    w.appendChild(btn);
+  }
+  $("#waterCount").textContent=`${day.water}/8 glasses (~${(day.water*0.25).toFixed(2).replace(/0$/,"")} L)`;
+  // last 7 days
+  const wk=$("#week"); wk.innerHTML="";
+  for(let i=6;i>=0;i--){
+    const d=new Date(); d.setDate(d.getDate()-i); const k=ymd(d); const dd=state.days[k];
+    const cnt=dd?HABITS.filter(([h])=>dd.habits[h]).length:0;
+    const ratio=cnt/HABITS.length;
+    const bg=dd?`rgba(63,143,107,${0.15+ratio*0.85})`:"var(--line)";
+    wk.innerHTML+=`<div>${["Su","Mo","Tu","We","Th","Fr","Sa"][d.getDay()]}<div class="dot" style="background:${bg};color:${ratio>.5?"#fff":"var(--ink)"}">${dd?cnt:"–"}</div></div>`;
+  }
+}
+
+function isoWeek(d){
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=t.getUTCDay()||7; t.setUTCDate(t.getUTCDate()+4-day);
+  const y=new Date(Date.UTC(t.getUTCFullYear(),0,1));
+  return Math.ceil(((t-y)/86400000+1)/7);
+}
+function workoutFor(d){
+  const dow=d.getDay(); // Mon=1 Wed=3 Fri=5
+  if(![1,3,5].includes(dow)) return null;
+  const odd=isoWeek(d)%2===1;
+  const seq = odd ? ["A","B","A"] : ["B","A","B"];
+  return seq[[1,3,5].indexOf(dow)];
+}
+function renderGym(){
+  const d=new Date(), w=workoutFor(d), day=ensureDay(today());
+  day.gymLog = day.gymLog || {};
+  const ul=$("#gymList"); ul.innerHTML="";
+  if(!w){
+    $("#gymTitle").textContent="Rest / active recovery day";
+    $("#gymSub").textContent="Your walk with Dad counts. Optional: 10 min stretching + plank 3 × 30 s.";
+    return;
+  }
+  $("#gymTitle").textContent=`Workout Day ${w}`;
+  $("#gymSub").textContent="Full body · ~45 min · tick each exercise as you finish it";
+  WORKOUT[w].forEach(([name,sets],i)=>{
+    const k=w+i, on=!!day.gymLog[k];
+    const li=document.createElement("li"); if(on) li.className="done";
+    li.innerHTML=`<input type="checkbox" class="chk" ${on?"checked":""}><span class="txt ex"><b>${esc(name)}</b><span class="muted">${sets}</span></span>`;
+    li.querySelector(".chk").onchange=e=>{
+      day.gymLog[k]=e.target.checked;
+      if(WORKOUT[w].every((_,j)=>day.gymLog[w+j])){ day.habits.gym=true; toast("Workout done 💪"); }
+      save(); renderAll();
+    };
+    ul.appendChild(li);
+  });
+}
+
+function nowMinutes(){ const d=new Date(); return d.getHours()*60+d.getMinutes(); }
+function toMin(hhmm){ const [h,m]=hhmm.split(":").map(Number); return h*60+m; }
+function fmt(hhmm){ let [h,m]=hhmm.split(":").map(Number); const ap=h>=12?"pm":"am"; h=h%12||12; return h+(m?":"+pad(m):"")+ap; }
+
+function renderToday(){
+  const date=today(), day=ensureDay(date), now=nowMinutes();
+  let cur=-1; SCHEDULE.forEach((s,i)=>{ if(toMin(s[0])<=now) cur=i; });
+  const tl=$("#timeline"); tl.innerHTML="";
+  SCHEDULE.forEach((s,i)=>{
+    const el=document.createElement(s[2]?"a":"div");
+    el.className="slot"+(i===cur?" current":i<cur?" past":"");
+    if(s[2]){ el.href="#"+s[2]; el.style.textDecoration="none"; el.style.color="inherit"; }
+    el.innerHTML=`<span class="t">${fmt(s[0])}</span><span>${esc(s[1])}${s[2]?" ›":""}</span>`;
+    tl.appendChild(el);
+  });
+  const hdr=cur>=0?SCHEDULE[cur][1]:"Sleep in, it's early";
+  $("#hdrNow").textContent="Now: "+hdr;
+  const h=new Date().getHours();
+  $("#hdrTitle").textContent=(h<12?"Good morning":h<17?"Good afternoon":"Good evening")+", Saish";
+  $("#hdrDate").textContent=new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long"});
+  // progress across tasks + habits + water
+  const ids=[...day.deep,...day.study];
+  const tdone=ids.filter(id=>state.done[id]).length;
+  const hdone=HABITS.filter(([k])=>day.habits[k]).length;
+  const total=ids.length+HABITS.length+1;
+  const doneAll=tdone+hdone+(day.water>=8?1:0);
+  const pct=total?Math.round(doneAll/total*100):0;
+  $("#todayBar").style.width=pct+"%"; $("#todayPct").textContent=pct+"%";
+  const nextDeep=day.deep.find(id=>!state.done[id]);
+  const nextStudy=day.study.find(id=>!state.done[id]);
+  const w=workoutFor(new Date());
+  $("#todaySummary").innerHTML=`
+    <ul class="tasks">
+      <li><span class="txt"><a href="#deep" style="color:inherit"><b>🎯 Deep work</b></a><br><span class="muted">${nextDeep?"Next: "+esc(taskText(nextDeep)):"All done ✅"}</span></span></li>
+      <li><span class="txt"><a href="#study" style="color:inherit"><b>📚 Course prep</b></a><br><span class="muted">${nextStudy?"Next: "+esc(taskText(nextStudy)):"All done ✅"}</span></span></li>
+      <li><span class="txt"><a href="#gym" style="color:inherit"><b>💪 Gym</b></a><br><span class="muted">${w?"Workout Day "+w:"Rest day: walk with Dad counts"}</span></span></li>
+      <li><span class="txt"><a href="#habits" style="color:inherit"><b>💧 Habits</b></a><br><span class="muted">${hdone}/${HABITS.length} habits · ${day.water}/8 glasses</span></span></li>
+    </ul>`;
+}
+
+function csv(){
+  const rows=[["date","category","item","done"]];
+  Object.keys(state.days).sort().forEach(date=>{
+    const d=state.days[date];
+    ["deep","study"].forEach(b=>d[b].forEach(id=>rows.push([date,b,taskText(id),state.done[id]?1:0])));
+    HABITS.forEach(([k,label])=>rows.push([date,"habit",label,d.habits[k]?1:0]));
+    rows.push([date,"water","glasses",d.water||0]);
+  });
+  return rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+}
+async function copy(text,msg){
+  try{ await navigator.clipboard.writeText(text); toast(msg); }
+  catch(e){ toast("Select the text and copy it manually"); }
+}
+
+/* ---------------- AI EVENING REVIEW ---------------- */
+function tomorrow(){ const d=new Date(); d.setDate(d.getDate()+1); return ymd(d); }
+function upcoming(b,day,n){
+  return QUEUE[b].filter(t=>!state.done[t.id] && !day[b].includes(t.id)).slice(0,n);
+}
+function report(){
+  const date=today(), day=ensureDay(date), L=[];
+  L.push(`DAILY REPORT ${date} (plan for ${tomorrow()})`);
+  L.push("");
+  L.push("RULES FOR CLAUDE:");
+  L.push("- Build tomorrow's lists: 5 DEEP tasks and 5 STUDY tasks (max 6 each).");
+  L.push("- Use ONLY task IDs listed in this report (NOT DONE or NEXT IN PLAN). Never invent an ID.");
+  L.push("- Put NOT DONE tasks first unless I say otherwise.");
+  L.push("- Any task not in this report must be written as NEW: <text>, and explain why in one line.");
+  L.push("- Reply with the lists in exactly this format, one per line: DEEP: <id> or STUDY: <id> (or NEW: text). Then a 2-line note on today.");
+  L.push("");
+  ["deep","study"].forEach(b=>{
+    const name=b==="deep"?"DEEP WORK":"COURSE PREP";
+    const done=day[b].filter(id=>state.done[id]), not=day[b].filter(id=>!state.done[id]);
+    L.push(`${name}: ${done.length}/${day[b].length} done`);
+    done.forEach(id=>L.push(`  DONE      ${id} | ${taskText(id)}`));
+    not.forEach(id=>L.push(`  NOT DONE  ${id} | ${taskText(id)}`));
+    L.push(`  NEXT IN PLAN:`);
+    upcoming(b,day,8).forEach(t=>L.push(`  ${t.id} | ${t.text}${t.start>tomorrow()?" (future phase, starts "+t.start+")":""}`));
+    L.push("");
+  });
+  const hd=HABITS.filter(([k])=>day.habits[k]).map(([,l])=>l);
+  const hm=HABITS.filter(([k])=>!day.habits[k]).map(([,l])=>l);
+  L.push(`HABITS: ${hd.length}/${HABITS.length} · water ${day.water}/8 glasses`);
+  if(hm.length) L.push(`  Missed: ${hm.join("; ")}`);
+  L.push("");
+  L.push("MY NOTES FOR TOMORROW (optional): ");
+  return L.join("\n");
+}
+function importPlan(text){
+  const date=tomorrow(), lists={deep:[],study:[]}, ok=[], bad=[];
+  text.split(/\r?\n/).forEach(raw=>{
+    const line=raw.replace(/^[\s*\-•\d.)]+/,"").trim();
+    const m=line.match(/^(DEEP|STUDY)\s*:\s*(.+)$/i); if(!m) return;
+    const b=m[1].toLowerCase(), val=m[2].replace(/\s*\|.*$/,"").trim();
+    if(lists[b].length>=6){ bad.push(`${line} (more than 6 tasks)`); return; }
+    const nm=val.match(/^NEW\s*:\s*(.+)$/i);
+    if(nm){
+      const id="c-"+Date.now()+"-"+Math.random().toString(36).slice(2,6);
+      state.custom[id]={text:"✨ "+nm[1].trim(),block:b}; lists[b].push(id); ok.push("✨ "+nm[1].trim()); return;
+    }
+    const t=QUEUE[b].find(x=>x.id===val);
+    const c=state.custom[val] && state.custom[val].block===b;
+    if((t||c) && !state.done[val] && !lists[b].includes(val)){ lists[b].push(val); ok.push(taskText(val)); }
+    else bad.push(`${val} (${(t||c)?(state.done[val]?"already done":"duplicate"):"ID not in your plan, rejected"})`);
+  });
+  if(!lists.deep.length && !lists.study.length) return {msg:"Nothing imported. Make sure lines start with DEEP: or STUDY:"};
+  const prev=state.days[date]||{habits:{},water:0};
+  state.days[date]={deep:lists.deep, study:lists.study, carried:[], habits:prev.habits||{}, water:prev.water||0, fromAI:true};
+  save();
+  return {msg:`Imported ${lists.deep.length} deep + ${lists.study.length} study tasks for ${date}.`+(bad.length?`<br><b>Rejected ${bad.length}:</b><br>`+bad.map(esc).join("<br>"):"<br>No hallucinated IDs found ✅")};
+}
+
+function renderAll(){
+  renderToday(); renderTasks("deep"); renderTasks("study"); renderHabits(); renderGym();
+  $("#csvBox").value=csv();
+  $("#reportBox").value=report();
+}
+
+/* ---------------- ROUTING + EVENTS ---------------- */
+const VIEWS=["today","deep","study","gym","habits","data"];
+function route(){
+  const v=(location.hash||"#today").slice(1);
+  const view=VIEWS.includes(v)?v:"today";
+  VIEWS.forEach(x=>$("#v-"+x).classList.toggle("show",x===view));
+  document.querySelectorAll("nav a").forEach(a=>a.classList.toggle("active",a.dataset.v===view));
+  window.scrollTo(0,0);
+}
+window.addEventListener("hashchange",route);
+
+document.querySelectorAll("form[data-block]").forEach(f=>f.addEventListener("submit",e=>{
+  e.preventDefault();
+  const inp=f.querySelector("input"), text=inp.value.trim(); if(!text) return;
+  const b=f.dataset.block, id="c-"+Date.now();
+  state.custom[id]={text,block:b};
+  ensureDay(today())[b].push(id); inp.value=""; save(); renderAll();
+}));
+document.querySelectorAll("[data-pull]").forEach(btn=>btn.onclick=()=>{
+  const b=btn.dataset.pull, day=ensureDay(today()), before=day[b].length;
+  fill(day,b,today(),before+1);
+  if(day[b].length===before){
+    // allow pulling the next not-yet-started phase task early
+    const next=QUEUE[b].find(t=>!state.done[t.id]&&!day[b].includes(t.id));
+    if(next) day[b].push(next.id);
+  }
+  save(); renderAll(); toast(day[b].length>before?"Added from the plan":"Plan is empty 🎉");
+});
+$("#copyCsv").onclick=()=>copy(csv(),"CSV copied");
+$("#copyReport").onclick=()=>copy(report(),"Report copied: paste it into Claude");
+$("#importBtn").onclick=()=>{
+  const r=importPlan($("#importBox").value), box=$("#importResult");
+  box.style.display="block"; box.innerHTML=r.msg; renderAll();
+};
+$("#copyBackup").onclick=()=>{ const s=JSON.stringify(state); $("#backupBox").value=s; copy(s,"Backup copied"); };
+$("#restoreBtn").onclick=()=>{
+  try{ const s=JSON.parse($("#backupBox").value); if(!s.days) throw 0; state=s; save(); renderAll(); toast("Restored ✅"); }
+  catch(e){ toast("That doesn't look like a backup"); }
+};
+
+// Re-render every minute (moves the 'now' marker, starts a new day at midnight)
+let lastDay=today();
+setInterval(()=>{ if(today()!==lastDay){ lastDay=today(); } renderAll(); },60000);
+
+renderAll(); route();
+</script>
+</body>
+</html>
