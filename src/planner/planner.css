@@ -134,6 +134,11 @@ body:has(.planner) {
   font-size: 15px;
   color: #e3dafa;
 }
+.planner .p-hdr .next {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+}
 .planner .p-hdr .mode {
   display: inline-block;
   margin-top: 8px;
@@ -569,7 +574,11 @@ body:has(.planner) {
 }
 .planner .wbox {
   width: 100%;
-  height: 34px;
+  height: var(--tap);
+  padding: 0;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
   border-radius: 10px;
   display: grid;
   place-items: center;
@@ -591,6 +600,20 @@ body:has(.planner) {
 .planner .wbox.rest {
   background: rgba(255, 255, 255, 0.05);
   border: 1px dashed rgba(255, 255, 255, 0.3);
+}
+.planner .wbox.selected {
+  outline: 2px solid #fff6d6;
+  outline-offset: 2px;
+}
+.planner .day-note {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.planner .orb:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .planner .wbox.missed {
   background: rgba(255, 255, 255, 0.05);

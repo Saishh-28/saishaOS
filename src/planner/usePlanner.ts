@@ -254,25 +254,25 @@ export function usePlanner(store: PlannerStore | null, today: string) {
    * last item of today's session, the gym habit is ticked too.
    * Returns true if that happened.
    */
-  const setExercise = (session: GymSession, key: string, patch: Partial<ExerciseLog>): boolean => {
+  const setExercise = (session: GymSession, key: string, patch: Partial<ExerciseLog>, date = today): boolean => {
     if (!store || !snapRef.current) return false;
     // Read the latest state (not this render's), so quick successive taps don't drop ticks.
     const cur = snapRef.current;
-    const todays = cur.exercises.get(today) ?? {};
+    const todays = cur.exercises.get(date) ?? {};
     const log: ExerciseLog = { done: false, sets: null, reps: null, weightKg: null, ...todays[key], ...patch };
     const after = { ...todays, [key]: log };
-    const habits = cur.habits.get(today) ?? {};
+    const habits = cur.habits.get(date) ?? {};
     const completes = !!patch.done && isSessionComplete(session, (k) => !!after[k]?.done) && !habits[GYM_HABIT];
     mutate(
       (s) => {
         const n = cloneSnap(s);
-        n.exercises.set(today, after);
-        if (completes) n.habits.set(today, { ...habits, [GYM_HABIT]: true });
+        n.exercises.set(date, after);
+        if (completes) n.habits.set(date, { ...habits, [GYM_HABIT]: true });
         return n;
       },
       async () => {
-        await store.setExercise(today, key, log);
-        if (completes) await store.setHabit(today, GYM_HABIT, true);
+        await store.setExercise(date, key, log);
+        if (completes) await store.setHabit(date, GYM_HABIT, true);
       },
     );
     return completes;
