@@ -21,6 +21,54 @@ function check<T extends { error: { message: string } | null }>(res: T, what: st
   return res;
 }
 
+/** Per-attempt limit and overall limit for one review (so the phone never spins for minutes). */
+const GEMINI_ATTEMPT_TIMEOUT_MS = 25_000;
+const GEMINI_BUDGET_MS = 50_000;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** HTTP status from a @google/genai ApiError (or undefined). */
+function geminiStatus(e: unknown): number | undefined {
+  const s = (e as { status?: unknown })?.status;
+  return typeof s === "number" ? s : undefined;
+}
+
+/**
+ * Retry transient Gemini failures (busy / rate limited / 5xx) with backoff,
+ * then turn the final failure into a clear message for the user.
+ */
+export async function withGeminiRetry<T>(
+  fn: () => Promise<T>,
+  delays = [1500, 4000],
+  wait = sleep,
+  budgetMs = GEMINI_BUDGET_MS,
+  now = () => Date.now(),
+): Promise<T> {
+  const started = now();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const status = geminiStatus(e);
+      const timedOut = status === undefined && /abort|timeout|timed out/i.test(String((e as Error)?.name) + String((e as Error)?.message));
+      const transient = timedOut || status === 429 || (status !== undefined && status >= 500);
+      const timeLeft = budgetMs - (now() - started);
+      if (transient && attempt < delays.length && timeLeft > delays[attempt] + GEMINI_ATTEMPT_TIMEOUT_MS / 2) {
+        await wait(delays[attempt]);
+        continue;
+      }
+      console.error("[gemini]", status, e instanceof Error ? e.message.slice(0, 300) : e);
+      if (timedOut) throw new HttpError(504, "Gemini took too long to answer. Try again in a minute.");
+      if (status === 429) throw new HttpError(503, "Gemini's rate limit was hit. Wait a minute and try again.");
+      if (status !== undefined && status >= 500) throw new HttpError(503, "Gemini is busy right now. Try again in a minute.");
+      if (status === 400 || status === 401 || status === 403)
+        throw new HttpError(502, "Gemini rejected the request. Check that GEMINI_API_KEY is valid and the model name is right.");
+      if (status === 404) throw new HttpError(502, "Gemini model not found. Check GEMINI_MODEL.");
+      throw new HttpError(502, "Couldn't reach Gemini. Try again.");
+    }
+  }
+}
+
 export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerDeps {
   // Supabase settings come only from the Worker's own config, never from request headers.
   const url = env.SUPABASE_URL || env.VITE_SUPABASE_URL;
@@ -90,7 +138,7 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
 
     async askGemini(system, prompt, allowed) {
       if (!env.GEMINI_API_KEY) throw new HttpError(503, "The server has no GEMINI_API_KEY. Locally, add it to .dev.vars; in production, run `npx wrangler secret put GEMINI_API_KEY`.");
-      const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY, httpOptions: { timeout: GEMINI_ATTEMPT_TIMEOUT_MS } });
       // Structured output. The ID lists are also constrained to the exact IDs in the
       // report (enum), so the model can't even produce an unknown ID; the server
       // still validates everything afterwards.
@@ -98,7 +146,7 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
         ids.length
           ? { type: Type.ARRAY, items: { type: Type.STRING, enum: ids }, maxItems: String(AI_MAX_PER_BLOCK) }
           : { type: Type.ARRAY, items: { type: Type.STRING }, maxItems: "0" };
-      const res = await ai.models.generateContent({
+      const request = () => ai.models.generateContent({
         model: env.GEMINI_MODEL || DEFAULT_MODEL,
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
@@ -130,6 +178,7 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
           },
         },
       });
+      const res = await withGeminiRetry(request);
       const text = res.text;
       if (!text) throw new HttpError(502, "Gemini returned an empty answer. Try again.");
       return text;

@@ -691,7 +691,7 @@ function AiPlanner({ p, today, notes, toast }: { p: Planner; today: string; note
       {!preview && (
         <div className="row">
           <button className="btn wide" disabled={!!busy} onClick={plan}>
-            {busy === "plan" ? "Asking Gemini…" : "🤖 Plan tomorrow"}
+            {busy === "plan" ? "Asking Gemini… (up to a minute if it’s busy)" : "🤖 Plan tomorrow"}
           </button>
         </div>
       )}
