@@ -3,7 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase, signInWithGoogle, signInWithPassword } from "../supabase";
 import { SCHEDULE } from "./plan";
 import { MotionConfig } from "framer-motion";
-import { currentSlotIndex, greeting, isYmd } from "./logic";
+import { currentSlotIndex, formatTime, greeting, isYmd } from "./logic";
 import { clockIn, longDate } from "./gym";
 import { sfx } from "./sound";
 import { Icon, Lumi, Stars } from "./ui";
@@ -196,6 +196,11 @@ export default function PlannerApp() {
             {greeting(clock.hour)}, {firstName}
           </h1>
           <div className="now">Now: {cur >= 0 ? SCHEDULE[cur].label : "Sleep in, it's early"}</div>
+          {SCHEDULE[cur + 1] && (
+            <div className="next">
+              Next at {formatTime(SCHEDULE[cur + 1].time)}: {SCHEDULE[cur + 1].label}
+            </div>
+          )}
           {store?.kind === "local" && <span className="mode">Local mode: saved on this device only</span>}
         </div>
         {view !== "today" && (

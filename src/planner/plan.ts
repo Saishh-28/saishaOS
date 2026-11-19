@@ -171,7 +171,7 @@ export const HABITS: Habit[] = [
 export const WATER_METRIC = "water_cups";
 export const WATER_MAX = 8;
 
-export type ScheduleLink = Block | "gym" | "habits" | null;
+export type ScheduleLink = Block | "gym" | "habits" | "review" | null;
 export interface ScheduleSlot {
   time: string; // HH:MM, 24h
   label: string;
@@ -185,11 +185,12 @@ export const SCHEDULE: ScheduleSlot[] = [
   { time: "09:00", label: "Deep work 1", link: "deep" },
   { time: "11:00", label: "Walk with Dad (~7k steps)", link: "habits" },
   { time: "12:00", label: "Deep work 2", link: "deep" },
-  { time: "13:00", label: "Lunch + water", link: null },
+  { time: "13:00", label: "Lunch + water, then a 10–15 min walk", link: "habits" },
   { time: "14:00", label: "Course prep & career", link: "study" },
   { time: "15:30", label: "Free time / rest", link: null },
   { time: "17:00", label: "Teach your brother", link: null },
   { time: "18:30", label: "Evening steps, reading", link: "habits" },
+  { time: "20:30", label: "Evening review: plan tomorrow", link: "review" },
   { time: "21:00", label: "Sleep playlist, skincare", link: null },
   { time: "21:30", label: "Phone off", link: null },
   { time: "22:00", label: "Sleep", link: null },
