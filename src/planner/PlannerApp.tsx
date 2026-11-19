@@ -2,20 +2,24 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase, signInWithGoogle, signInWithPassword } from "../supabase";
 import { SCHEDULE } from "./plan";
-import { currentSlotIndex, greeting, ymd } from "./logic";
+import { MotionConfig } from "framer-motion";
+import { currentSlotIndex, greeting, isYmd } from "./logic";
+import { clockIn, longDate } from "./gym";
+import { sfx } from "./sound";
+import { Icon, Lumi, Stars } from "./ui";
 import { Link, PlannerView, pathForView, usePathname, viewFromPath } from "./router";
 import { LocalStore, PlannerStore, SupabaseStore } from "./store";
 import { usePlanner } from "./usePlanner";
 import { BlockScreen, GymScreen, HabitsScreen, ReviewScreen, ScreenProps, TodayScreen } from "./screens";
 import "./planner.css";
 
-const NAV: { v: PlannerView; ic: string; label: string }[] = [
-  { v: "today", ic: "☀️", label: "Today" },
-  { v: "deep", ic: "🎯", label: "Deep" },
-  { v: "study", ic: "📚", label: "Study" },
-  { v: "gym", ic: "💪", label: "Gym" },
-  { v: "habits", ic: "💧", label: "Habits" },
-  { v: "review", ic: "🤖", label: "Review" },
+const NAV: { v: PlannerView; label: string }[] = [
+  { v: "today", label: "Today" },
+  { v: "deep", label: "Deep" },
+  { v: "study", label: "Study" },
+  { v: "gym", label: "Gym" },
+  { v: "habits", label: "Habits" },
+  { v: "review", label: "Review" },
 ];
 
 const TITLES: Record<PlannerView, string> = {
@@ -27,15 +31,20 @@ const TITLES: Record<PlannerView, string> = {
   review: "Evening review",
 };
 
+/** Dev only: /planner?date=2026-11-23 pretends today is that date (for testing gym days, rollover, etc.). */
+function devDate(): string | null {
+  if (!(import.meta as any).env?.DEV) return null;
+  const v = new URLSearchParams(window.location.search).get("date");
+  return isYmd(v) ? v : null;
+}
+
 /** Re-render every 30 s so the "now" marker moves and a new day starts at midnight. */
 function currentTime(): Date {
-  const d = new Date();
-  // Dev only: /planner?date=2026-11-23 pretends today is that date (for testing gym days, rollover, etc.).
-  if ((import.meta as any).env?.DEV) {
-    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(new URLSearchParams(window.location.search).get("date") ?? "");
-    if (m) d.setFullYear(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
-  }
-  return d;
+  return new Date();
+}
+
+function partOfDay(hour: number): string {
+  return hour < 5 ? "NIGHT" : hour < 12 ? "MORNING" : hour < 17 ? "AFTERNOON" : hour < 20 ? "TWILIGHT" : "NIGHT";
 }
 
 function useNow(): Date {
@@ -122,7 +131,10 @@ export default function PlannerApp() {
   const pathname = usePathname();
   const view = viewFromPath(pathname);
   const now = useNow();
-  const today = ymd(now);
+  // Always India time, whatever time zone the device is set to.
+  const clock = clockIn(now);
+  const today = devDate() ?? clock.date;
+  const minutes = clock.hour * 60 + clock.minute;
   const { session, ready } = useSession();
   const userId = session?.user?.id ?? null;
 
@@ -147,28 +159,50 @@ export default function PlannerApp() {
     document.title = `${TITLES[view]} · Saisha Planner`;
   }, [view]);
 
-  if (!ready) return <div className="planner" />;
+  // Morning chime: first tap of the day before noon (browsers don't allow sound before a tap).
+  useEffect(() => {
+    sfx.onUnlock = () => sfx.wakeUpOnce(today, clockIn(new Date()).hour);
+  }, [today]);
+
+  if (!ready)
+    return (
+      <div className="planner">
+        <Stars />
+      </div>
+    );
   if (supabase && !session)
     return (
       <div className="planner">
+        <Stars />
         <SignIn />
       </div>
     );
 
-  const cur = currentSlotIndex(now.getHours() * 60 + now.getMinutes());
+  const cur = currentSlotIndex(minutes);
   const firstName = (session?.user?.user_metadata?.full_name as string | undefined)?.split(" ")[0] || "Saish";
-  const props: ScreenProps = { p, today, now, toast };
+  const props: ScreenProps = { p, today, minutes, toast };
   const loaded = !!p.snap && !!p.day;
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="planner">
+      <Stars />
       <header className="p-hdr">
-        <div className="date">{now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long" })}</div>
-        <h1>
-          {greeting(now.getHours())}, {firstName}
-        </h1>
-        <div className="now">Now: {cur >= 0 ? SCHEDULE[cur].label : "Sleep in, it's early"}</div>
-        {store?.kind === "local" && <span className="mode">Local mode: saved on this device only</span>}
+        <div className="hdr-text">
+          <div className="date">
+            {longDate(today).toUpperCase()} · {partOfDay(clock.hour)}
+          </div>
+          <h1>
+            {greeting(clock.hour)}, {firstName}
+          </h1>
+          <div className="now">Now: {cur >= 0 ? SCHEDULE[cur].label : "Sleep in, it's early"}</div>
+          {store?.kind === "local" && <span className="mode">Local mode: saved on this device only</span>}
+        </div>
+        {view !== "today" && (
+          <div className="lumi-float small">
+            <Lumi size={50} />
+          </div>
+        )}
       </header>
       <main className="p-main">
         {p.error && (
@@ -205,8 +239,8 @@ export default function PlannerApp() {
       <nav className="p-nav" aria-label="Planner sections">
         {NAV.map((n) => (
           <Link key={n.v} to={pathForView(n.v)} className={n.v === view ? "active" : ""} aria-current={n.v === view ? "page" : undefined}>
-            <span className="ic" aria-hidden="true">
-              {n.ic}
+            <span className="ic">
+              <Icon name={n.v} />
             </span>
             {n.label}
           </Link>
@@ -216,5 +250,6 @@ export default function PlannerApp() {
         {toastMsg}
       </div>
     </div>
+    </MotionConfig>
   );
 }
