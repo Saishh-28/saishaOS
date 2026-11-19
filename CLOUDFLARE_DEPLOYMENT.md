@@ -1,5 +1,10 @@
 # Deploying Saisha OS to Cloudflare (100% Free, No Credit Card Required)
 
+> **Updated:** the up-to-date deployment steps (secrets, build variables, Supabase URLs) are in the [README](README.md#deploy-cloudflare-workers).
+> Use **Method A (Worker)** only. **Method B (Pages) no longer works**, because the API routes live in `worker.ts`, which Pages doesn't run.
+> Local development now runs this Worker too (`npm run dev`); the build output is `dist/client` + `dist/saisha_os`.
+
+
 This guide walks you through deploying **Saisha OS** to **Cloudflare** using either **Cloudflare Workers (with Static Assets)** or **Cloudflare Pages**.
 
 ---
