@@ -101,3 +101,31 @@ describe("AI plan validation (anti-hallucination)", () => {
     expect(v({ note: 5 }).note).toBe("");
   });
 });
+
+describe("future-phase tasks only fill gaps", () => {
+  // Planning 2026-11-20: only the 2026-11-19 phase is current.
+  const ctx = (doneIds: string[] = []) => ({
+    tasks,
+    done: new Map(doneIds.map((id) => [id, "2026-11-19"])),
+    planDate: "2026-11-20",
+  });
+  const study0 = "study-2026-11-19-0";
+  const study1 = "study-2026-11-19-1";
+  const future = "study-2026-11-23-0";
+
+  it("rejects a future-phase task while current-phase tasks are still unused", () => {
+    const r = validateAiPlan({ study: [study0, future] }, ctx());
+    expect(r.lists.study.map((t) => t.id)).toEqual([study0]);
+    expect(r.rejected).toEqual([{ item: future, reason: "Future phase (starts 2026-11-23) while 1 current-phase task is unused" }]);
+  });
+
+  it("accepts it once every current-phase task is picked or done, even if listed first", () => {
+    expect(validateAiPlan({ study: [future, study0, study1] }, ctx()).lists.study.map((t) => t.id)).toEqual([study0, study1, future]);
+    expect(validateAiPlan({ study: [study0, future] }, ctx([study1])).lists.study.map((t) => t.id)).toEqual([study0, future]);
+  });
+
+  it("never treats the user's own custom tasks as future", () => {
+    const r = validateAiPlan({ deep: ["c-1"] }, { ...ctx(), planDate: "2026-11-01" });
+    expect(r.lists.deep.map((t) => t.id)).toEqual(["c-1"]);
+  });
+});

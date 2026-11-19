@@ -59,7 +59,18 @@ function show(v: unknown): string {
   return (s ?? String(v)).slice(0, 80);
 }
 
-export function validateAiPlan(raw: unknown, ctx: { tasks: readonly PlanTask[]; done: Completions }): ValidatedPlan {
+export interface ValidationContext {
+  tasks: readonly PlanTask[];
+  done: Completions;
+  /**
+   * The date being planned (tomorrow). When given, a plan task whose phase
+   * starts after this date is only accepted once every current-phase task in
+   * that block is either done or already picked: future phases only fill gaps.
+   */
+  planDate?: string;
+}
+
+export function validateAiPlan(raw: unknown, ctx: ValidationContext): ValidatedPlan {
   const out: ValidatedPlan = { lists: { deep: [], study: [] }, newTasks: [], rejected: [], note: "" };
   if (!isObj(raw)) {
     out.rejected.push({ item: show(raw), reason: "Response was not a JSON object" });
@@ -69,6 +80,7 @@ export function validateAiPlan(raw: unknown, ctx: { tasks: readonly PlanTask[]; 
   const byId = new Map(ctx.tasks.map((t) => [t.id, t]));
   const seen = new Set<string>();
   const count: Record<Block, number> = { deep: 0, study: 0 };
+  const isFuture = (t: PlanTask) => !!ctx.planDate && !t.isCustom && t.phaseStart > ctx.planDate;
 
   for (const b of BLOCKS) {
     const ids = raw[b];
@@ -77,6 +89,17 @@ export function validateAiPlan(raw: unknown, ctx: { tasks: readonly PlanTask[]; 
       out.rejected.push({ item: `${b}: ${show(ids)}`, reason: `"${b}" must be a list of task IDs` });
       continue;
     }
+    const accept = (t: PlanTask) => {
+      if (count[b] >= AI_MAX_PER_BLOCK) {
+        out.rejected.push({ item: t.id, reason: `More than ${AI_MAX_PER_BLOCK} ${b} tasks` });
+        return;
+      }
+      count[b]++;
+      out.lists[b].push({ id: t.id, text: t.text });
+    };
+
+    // Pass 1: basic checks; current-phase tasks are accepted right away, future ones wait.
+    const future: PlanTask[] = [];
     for (const v of ids) {
       if (typeof v !== "string" || !v.trim()) {
         out.rejected.push({ item: show(v), reason: "Not a task ID" });
@@ -92,12 +115,25 @@ export function validateAiPlan(raw: unknown, ctx: { tasks: readonly PlanTask[]; 
         out.rejected.push({ item: id, reason: `Already done on ${ctx.done.get(id)}` });
       } else if (seen.has(id)) {
         out.rejected.push({ item: id, reason: "Duplicate" });
-      } else if (count[b] >= AI_MAX_PER_BLOCK) {
-        out.rejected.push({ item: id, reason: `More than ${AI_MAX_PER_BLOCK} ${b} tasks` });
       } else {
         seen.add(id);
-        count[b]++;
-        out.lists[b].push({ id, text: t.text });
+        if (isFuture(t)) future.push(t);
+        else accept(t);
+      }
+    }
+
+    // Pass 2: future-phase tasks only fill gaps once the current phase is used up.
+    if (future.length) {
+      const unusedCurrent = ctx.tasks.filter(
+        (t) => t.block === b && !t.isCustom && !isFuture(t) && !ctx.done.has(t.id) && !seen.has(t.id),
+      ).length;
+      for (const t of future) {
+        if (unusedCurrent > 0) {
+          out.rejected.push({
+            item: t.id,
+            reason: `Future phase (starts ${t.phaseStart}) while ${unusedCurrent} current-phase task${unusedCurrent > 1 ? "s are" : " is"} unused`,
+          });
+        } else accept(t);
       }
     }
   }
