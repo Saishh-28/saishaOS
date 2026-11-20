@@ -145,23 +145,33 @@ export function isEligible(task: PlanTask, date: string, done: Completions): boo
 /* Daily lists                                                         */
 /* ------------------------------------------------------------------ */
 
-/** Append eligible queue tasks, in order, until the list has `target` items. */
+/**
+ * Append queue tasks, in order, until the list has `target` items.
+ * Current-phase tasks come first. If the current phase runs out, the next
+ * future-phase tasks fill the gap (`gapFill`), so a day is never empty just
+ * because a phase finished early.
+ */
 export function fillBlock(
   items: readonly ListItem[],
   queue: readonly PlanTask[],
   date: string,
   done: Completions,
   target: number = DAILY_TARGET,
+  gapFill = true,
 ): ListItem[] {
   const out = [...items];
   const present = new Set(out.map((i) => i.taskId));
-  for (const t of queue) {
-    if (out.length >= target) break;
-    if (isEligible(t, date, done) && !present.has(t.id)) {
-      out.push({ taskId: t.id, carriedOver: false });
-      present.add(t.id);
+  const add = (ok: (t: PlanTask) => boolean) => {
+    for (const t of queue) {
+      if (out.length >= target) break;
+      if (ok(t) && !present.has(t.id)) {
+        out.push({ taskId: t.id, carriedOver: false });
+        present.add(t.id);
+      }
     }
-  }
+  };
+  add((t) => isEligible(t, date, done));
+  if (gapFill) add((t) => !done.has(t.id));
   return out;
 }
 
@@ -212,7 +222,7 @@ export function pullNext(
   date: string,
   done: Completions,
 ): { items: ListItem[]; added: PlanTask | null; early: boolean } {
-  const filled = fillBlock(items, queue, date, done, items.length + 1);
+  const filled = fillBlock(items, queue, date, done, items.length + 1, false);
   if (filled.length > items.length) {
     const id = filled[filled.length - 1].taskId;
     return { items: filled, added: queue.find((t) => t.id === id) ?? null, early: false };

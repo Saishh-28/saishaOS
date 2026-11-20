@@ -886,7 +886,15 @@ interface ReviewResponse {
   tomorrow: string;
   tomorrowHasList: boolean;
   model: string;
+  /** "default": Gemini left a block empty twice, so the normal plan filled it. */
+  source?: "ai" | "ai-retry" | "default";
+  defaultBlocks?: Block[];
   plan: ValidatedPlan;
+}
+
+/** Nothing to save: both lists and the new tasks are empty. */
+export function isEmptyPreview(plan: ValidatedPlan): boolean {
+  return !plan.lists.deep.length && !plan.lists.study.length && !plan.newTasks.length;
 }
 
 async function plannerApi<T>(path: string, body: unknown): Promise<T> {
@@ -1011,7 +1019,17 @@ function AiPlanner({ p, today, notes, toast }: { p: Planner; today: string; note
       )}
       {preview && (
         <div className="note preview">
-          <b>Preview for {preview.tomorrow}</b> <span className="muted">· {preview.model}</span>
+          <b>Preview for {preview.tomorrow}</b>{" "}
+          <span className="muted">· {preview.source === "default" ? "default plan" : preview.model}</span>
+          {preview.source === "default" && (
+            <div className="note" role="status">
+              Lumi was busy, here's your default plan
+              {preview.defaultBlocks && preview.defaultBlocks.length === 1
+                ? ` for ${preview.defaultBlocks[0] === "deep" ? "deep work" : "course prep"}`
+                : ""}
+              : unfinished tasks carried over, then the next tasks in your plan.
+            </div>
+          )}
           {preview.tomorrowHasList && <div className="note error">Tomorrow already has a list. Approving replaces it.</div>}
           <div style={{ marginTop: 8 }}>
             <b>🎯 Deep</b>
@@ -1025,8 +1043,11 @@ function AiPlanner({ p, today, notes, toast }: { p: Planner; today: string; note
             <Rejected items={preview.plan.rejected} />
           </div>
           {preview.plan.note && <p style={{ marginBottom: 0 }}>💬 {preview.plan.note}</p>}
+          {isEmptyPreview(preview.plan) && (
+            <div className="note">Nothing to save. Your normal plan will fill tomorrow.</div>
+          )}
           <div className="row">
-            <button className="btn" disabled={!!busy} onClick={approve}>
+            <button className="btn" disabled={!!busy || isEmptyPreview(preview.plan)} onClick={approve}>
               {busy === "save" ? "Saving…" : "Approve"}
             </button>
             <button className="btn ghost" disabled={!!busy} onClick={() => setPreview(null)}>

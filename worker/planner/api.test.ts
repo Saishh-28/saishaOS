@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { buildPlanTasks } from "../../src/planner/logic";
-import { handlePlannerApi, PlannerDeps, ReviewData, SaveRequest } from "./api";
+import { DEFAULT_PLAN_NOTE, handlePlannerApi, HttpError, PlannerDeps, REVIEW_SYSTEM, ReviewData, SaveRequest } from "./api";
 
 const TODAY = "2026-11-24";
 const PLAN = buildPlanTasks();
@@ -160,5 +160,107 @@ describe("routing", () => {
       deps,
     );
     expect(bad.status).toBe(400);
+  });
+});
+
+describe("empty AI answers (Part A)", () => {
+  const EMPTY = '{"deep":[],"study":[],"new":[],"note":""}';
+
+  it("retries once with the primary model, then uses the default plan; nothing is saved", async () => {
+    const { deps } = fakeDeps(EMPTY);
+    const r = await call(deps, "/api/planner/review", { date: TODAY });
+    expect(r.status).toBe(200);
+    const calls = (deps.askGemini as any).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0][3]).toBeUndefined();
+    expect(calls[1][3]).toEqual({ primaryOnly: true });
+    expect(r.body.source).toBe("default");
+    expect(r.body.defaultBlocks).toEqual(["deep", "study"]);
+    expect(r.body.plan.note).toBe(DEFAULT_PLAN_NOTE);
+    // Default plan = carry over today's unfinished task, then fill to 5.
+    expect(r.body.plan.lists.deep[0].id).toBe("deep-2026-11-23-1");
+    expect(r.body.plan.lists.deep).toHaveLength(5);
+    expect(r.body.plan.lists.study[0].id).toBe("study-2026-11-23-0");
+    expect(deps.saveTomorrow).not.toHaveBeenCalled();
+  });
+
+  it("uses the retry when the primary model fills the lists", async () => {
+    let n = 0;
+    const { deps } = fakeDeps(() => (n++ === 0 ? EMPTY : '{"deep":["deep-2026-11-23-1"],"study":["study-2026-11-23-0"],"new":[],"note":"ok"}'));
+    const r = await call(deps, "/api/planner/review", { date: TODAY });
+    expect(r.body.source).toBe("ai-retry");
+    expect(r.body.plan.lists.deep.map((t: any) => t.id)).toEqual(["deep-2026-11-23-1"]);
+    expect(r.body.plan.note).toBe("ok");
+  });
+
+  it("does not retry when the model fills both blocks", async () => {
+    const { deps } = fakeDeps('{"deep":["deep-2026-11-23-1"],"study":["study-2026-11-23-0"],"new":[],"note":""}');
+    const r = await call(deps, "/api/planner/review", { date: TODAY });
+    expect((deps.askGemini as any).mock.calls).toHaveLength(1);
+    expect(r.body.source).toBe("ai");
+  });
+
+  it("last night's case: every current-phase task done, so future-phase tasks fill the gap", async () => {
+    const setupDone = new Map(PLAN.filter((t) => t.phaseStart === "2026-11-19").map((t) => [t.id, "2026-11-20"] as const));
+    const { deps } = fakeDeps(EMPTY);
+    deps.now = () => new Date("2026-11-20T15:00:00Z");
+    deps.loadData = vi.fn(async () => ({
+      tasks: PLAN,
+      done: setupDone,
+      lists: { deep: [{ taskId: "deep-2026-11-19-0", carriedOver: false }], study: [] },
+      habits: {},
+      water: 5,
+      tomorrowHasList: false,
+    }));
+    const r = await call(deps, "/api/planner/review", { date: "2026-11-20" });
+    const prompt: string = (deps.askGemini as any).mock.calls[0][1];
+    expect(prompt).toContain('"current_phase_left": 0');
+    expect(REVIEW_SYSTEM).toMatch(/FILL the remaining slots/);
+    expect(r.body.plan.lists.deep.map((t: any) => t.id)).toEqual([0, 1, 2, 3, 4].map((i) => `deep-2026-11-23-${i}`));
+    // ...and approving that default plan passes validation and saves it.
+    const ok = await call(deps, "/api/planner/review/approve", {
+      date: "2026-11-20",
+      deep: r.body.plan.lists.deep.map((t: any) => t.id),
+      study: r.body.plan.lists.study.map((t: any) => t.id),
+      new: [],
+    });
+    expect(ok.status).toBe(200);
+    expect(ok.body.rejected).toEqual([]);
+    expect(ok.body.saved.deep).toBe(5);
+  });
+
+  it("an empty plan is never saved", async () => {
+    const { deps } = fakeDeps();
+    const r = await call(deps, "/api/planner/review/approve", { date: TODAY, deep: [], study: [], new: [] });
+    expect(r.status).toBe(422);
+    expect(deps.saveTomorrow).not.toHaveBeenCalled();
+  });
+});
+
+describe("Gemini unavailable (Part A)", () => {
+  const failing = (kind: string, status: number) => {
+    const { deps } = fakeDeps();
+    deps.askGemini = vi.fn(async () => {
+      throw Object.assign(new HttpError(status, "Gemini took too long"), { kind });
+    });
+    return deps;
+  };
+
+  it("busy or timed out after retries and fallback: shows the default plan instead of an error", async () => {
+    for (const kind of ["timeout", "busy", "rate_limit"]) {
+      const deps = failing(kind, 504);
+      const r = await call(deps, "/api/planner/review", { date: TODAY });
+      expect(r.status).toBe(200);
+      expect(r.body.source).toBe("default");
+      expect(r.body.plan.note).toBe(DEFAULT_PLAN_NOTE);
+      expect(r.body.plan.lists.deep[0].id).toBe("deep-2026-11-23-1");
+      expect((deps.askGemini as any).mock.calls).toHaveLength(1); // no extra retry
+      expect(deps.saveTomorrow).not.toHaveBeenCalled();
+    }
+  });
+
+  it("a bad key or unknown model still shows the error", async () => {
+    const r = await call(failing("rejected", 502), "/api/planner/review", { date: TODAY });
+    expect(r.status).toBe(502);
   });
 });
