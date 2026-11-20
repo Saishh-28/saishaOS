@@ -129,6 +129,8 @@ export interface ExerciseLog {
   weightKg: number | null;
   sets: number | null;
   reps: number | null;
+  /** The default exercise this one replaced (swaps), or null for an extra. Undefined for old rows. */
+  plannedKey?: string | null;
 }
 
 /** date -> exercise_key -> log */
