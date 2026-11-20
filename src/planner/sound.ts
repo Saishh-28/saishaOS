@@ -6,6 +6,8 @@
  * The first tap unlocks audio and preloads every file.
  */
 
+import { waterMilestone } from "./water";
+
 export type SoundName =
   | "tick-1"
   | "tick-2"
@@ -48,14 +50,6 @@ const WAKE_KEY = "saisha_wake_played";
 /** The Nth tick of the day (1-based) plays tick-N; the 6th and later all play tick-6. */
 export function tickSound(n: number): SoundName {
   return `tick-${Math.min(6, Math.max(1, Math.floor(n) || 1))}` as SoundName;
-}
-
-/** Water milestones: reaching 4 glasses is "half", reaching 8 is "full". Going down plays nothing. */
-export function waterMilestone(prev: number, next: number): "half" | "full" | null {
-  if (next <= prev) return null;
-  if (prev < 8 && next >= 8) return "full";
-  if (prev < 4 && next >= 4) return "half";
-  return null;
 }
 
 export function parseSettings(raw: string | null): SoundSettings {
@@ -157,16 +151,15 @@ class SoundBoard {
     this.play("block-complete", 350);
   }
 
-  /** Water glasses changed: a chime at 4 glasses, a bigger one at 8. */
-  water(prev: number, next: number) {
-    const m = waterMilestone(prev, next);
+  /** Water changed (ml): a soft chime at half the goal; sparkle sound when the goal is reached. */
+  water(prevMl: number, nextMl: number, goalMl: number) {
+    const m = waterMilestone(prevMl, nextMl, goalMl);
     if (m === "half") {
-      this.play("tick-3");
-      this.play("xp-sparkle", 160, 0.8);
+      this.play("tick-3", 0, 0.8);
       this.vibrate(VIBRATE.tick);
     } else if (m === "full") {
-      this.play("block-complete");
-      this.play("xp-sparkle", 250, 0.8);
+      this.play("xp-sparkle");
+      this.play("tick-5", 120, 0.6);
       this.vibrate(VIBRATE.cue);
     }
   }

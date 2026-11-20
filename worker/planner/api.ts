@@ -13,7 +13,7 @@
  */
 import { AI_MAX_PER_BLOCK, BLOCKS, Block } from "../../src/planner/plan";
 import { addDays, createDayLists, CUSTOM_SORT_BASE, DayLists, isYmd, PlanTask } from "../../src/planner/logic";
-import { buildReport, DailyReport } from "../../src/planner/report";
+import { buildReport, DailyReport, waterText } from "../../src/planner/report";
 import { validateAiPlan, ValidatedPlan } from "../../src/planner/validate";
 
 export interface ReviewData {
@@ -21,7 +21,10 @@ export interface ReviewData {
   done: Map<string, string>;
   lists: DayLists; // the reviewed day's lists
   habits: Record<string, boolean>;
+  /** ml */
   water: number;
+  /** This week's water goal (ml), when known. */
+  waterGoalMl?: number | null;
   tomorrowHasList: boolean;
 }
 
@@ -113,7 +116,7 @@ export function reviewPrompt(r: DailyReport): string {
         study: block("study"),
         habits_done: r.habitsDone,
         habits_missed: r.habitsMissed,
-        water_glasses: `${r.water}/8`,
+        water: waterText(r),
       },
       null,
       1,
@@ -200,7 +203,7 @@ export async function handlePlannerApi(
 
     if (route === "review") {
       const notes = typeof body.notes === "string" ? body.notes.slice(0, NOTES_MAX) : "";
-      const report = buildReport({ date, lists: data.lists, tasks: data.tasks, done: data.done, habits: data.habits, water: data.water, notes });
+      const report = buildReport({ date, lists: data.lists, tasks: data.tasks, done: data.done, habits: data.habits, water: data.water, waterGoalMl: data.waterGoalMl, notes });
       const allowed = allowedIds(report);
       const prompt = reviewPrompt(report);
       const ctx = { tasks: data.tasks, done: data.done, planDate: tomorrow };
