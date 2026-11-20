@@ -62,11 +62,15 @@ export function usePlanner(store: PlannerStore | null, today: string) {
   // briefly undo a tick that is still being saved.
   const pending = useRef(0);
   const reloadWanted = useRef(false);
+  // Bumped on every local change. A reload that started before a change would
+  // bring back the old value, so its result is dropped and it runs again.
+  const changeGen = useRef(0);
 
   const reload = useCallback(async () => {
     if (!store) return;
     // Only the most recent load may update state (StrictMode and retries can overlap).
     const gen = ++loadGen.current;
+    const changesAtStart = changeGen.current;
     try {
       let s = await store.load();
       if (gen !== loadGen.current) return;
@@ -78,6 +82,12 @@ export function usePlanner(store: PlannerStore | null, today: string) {
         s = { ...s, tasks: [...s.tasks, ...missing] };
       }
       if (gen !== loadGen.current) return;
+      if (changeGen.current !== changesAtStart) {
+        // You changed something while this was loading: try again once it's saved.
+        reloadWanted.current = true;
+        if (pending.current === 0) setTimeout(() => reloadRef.current(), 0);
+        return;
+      }
       setSnap(s);
       setLoadedOn(today);
       // A save error stays on screen after the reload that follows it; the
@@ -86,6 +96,9 @@ export function usePlanner(store: PlannerStore | null, today: string) {
       if (gen === loadGen.current) setError(e.message ?? String(e));
     }
   }, [store, today]);
+
+  const reloadRef = useRef(reload);
+  reloadRef.current = reload;
 
   useEffect(() => {
     setSnap(null);
@@ -103,6 +116,7 @@ export function usePlanner(store: PlannerStore | null, today: string) {
       const next = fn(snapRef.current);
       snapRef.current = next;
       setSnap(next);
+      changeGen.current++;
       pending.current++;
       try {
         await persist();
