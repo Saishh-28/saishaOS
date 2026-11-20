@@ -63,16 +63,19 @@ describe("plan seed", () => {
 });
 
 describe("phase-date filtering", () => {
-  it("only fills with tasks whose phase has started", () => {
+  it("fills with tasks whose phase has started first, then future-phase gap fillers", () => {
     const day = createDayLists({ date: "2026-11-19", tasks: PLAN, done: done(), prev: null });
     expect(ids(day.deep)).toEqual([0, 1, 2, 3, 4].map((i) => `deep-2026-11-19-${i}`));
-    // Only 2 study tasks exist in the first phase; future phases must not leak in.
-    expect(ids(day.study)).toEqual(["study-2026-11-19-0", "study-2026-11-19-1"]);
+    // Only 2 study tasks exist in the first phase; the next phase fills the other 3 slots.
+    expect(ids(day.study)).toEqual(["study-2026-11-19-0", "study-2026-11-19-1", "study-2026-11-23-0", "study-2026-11-23-1", "study-2026-11-23-2"]);
   });
 
   it("includes a phase on its exact start date", () => {
     const allSetupDone = done(Object.fromEntries(PLAN.filter((t) => t.phaseStart === "2026-11-19").map((t) => [t.id, "2026-11-20"])));
-    expect(createDayLists({ date: "2026-11-22", tasks: PLAN, done: allSetupDone, prev: null }).deep).toEqual([]);
+    // Before the next phase starts, its tasks fill the gap instead of leaving the day empty.
+    expect(ids(createDayLists({ date: "2026-11-22", tasks: PLAN, done: allSetupDone, prev: null }).deep)).toEqual(
+      [0, 1, 2, 3, 4].map((i) => `deep-2026-11-23-${i}`),
+    );
     const day = createDayLists({ date: "2026-11-23", tasks: PLAN, done: allSetupDone, prev: null });
     expect(ids(day.deep)[0]).toBe("deep-2026-11-23-0");
   });
@@ -84,7 +87,8 @@ describe("phase-date filtering", () => {
       done: done({ "deep-2026-11-19-0": "2026-11-18", "deep-2026-11-19-2": "2026-11-18" }),
       prev: null,
     });
-    expect(ids(day.deep)).toEqual(["deep-2026-11-19-1", "deep-2026-11-19-3", "deep-2026-11-19-4", "deep-2026-11-19-5"]);
+    // 4 setup tasks left, so the next phase's first task fills the 5th slot.
+    expect(ids(day.deep)).toEqual(["deep-2026-11-19-1", "deep-2026-11-19-3", "deep-2026-11-19-4", "deep-2026-11-19-5", "deep-2026-11-23-0"]);
   });
 
   it("phaseFor picks the latest phase that has started", () => {
@@ -118,6 +122,10 @@ describe("rollover + fill to 5", () => {
     expect(day.study).toEqual([
       { taskId: "study-2026-11-19-0", carriedOver: true },
       { taskId: "study-2026-11-19-1", carriedOver: false },
+      // gap fillers from the next phase
+      { taskId: "study-2026-11-23-0", carriedOver: false },
+      { taskId: "study-2026-11-23-1", carriedOver: false },
+      { taskId: "study-2026-11-23-2", carriedOver: false },
     ]);
   });
 
