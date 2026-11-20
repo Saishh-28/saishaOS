@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Block, GYM_HABIT, WATER_MAX } from "./plan";
 import { ExerciseLog, GymSession, isSessionComplete } from "./gym";
+import { applyEdit, PlanItem, planKey } from "./workouts";
+import type { WorkoutDay } from "./plan";
 import {
   backupToImportPlan,
   buildPlanTasks,
@@ -24,6 +26,7 @@ function cloneSnap(s: Snapshot): Snapshot {
     habits: new Map(s.habits),
     water: new Map(s.water),
     exercises: new Map(s.exercises),
+    workoutPlans: new Map(s.workoutPlans),
   };
 }
 
@@ -278,6 +281,28 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     return completes;
   };
 
+  /**
+   * Change your version of Day A / B (swap, reorder, add, remove) for `date` only,
+   * or always. See workouts.ts applyEdit.
+   */
+  const editWorkout = (w: WorkoutDay, date: string, scope: "today" | "always", fn: (list: PlanItem[]) => PlanItem[]) => {
+    if (!store || !snapRef.current) return;
+    const rows = applyEdit(snapRef.current.workoutPlans, w, date, scope, fn);
+    return mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        for (const r of rows) {
+          if (r.items) n.workoutPlans.set(planKey(w, r.scope), r.items);
+          else n.workoutPlans.delete(planKey(w, r.scope));
+        }
+        return n;
+      },
+      async () => {
+        for (const r of rows) await store.setWorkoutPlan(w, r.scope, r.items);
+      },
+    );
+  };
+
   const setWater = (glasses: number) => {
     const g = Math.max(0, Math.min(WATER_MAX, glasses));
     return (
@@ -335,6 +360,8 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     setHabit,
     exercisesFor,
     setExercise,
+    editWorkout,
+    workoutPlans: snap?.workoutPlans ?? new Map<string, PlanItem[]>(),
     setWater,
     setNotes,
     importBackup,
