@@ -90,7 +90,7 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
       };
     },
 
-    async askGemini(system, prompt, allowed) {
+    async askGemini(system, prompt, allowed, opts) {
       if (!env.GEMINI_API_KEY) throw new HttpError(503, "The server has no GEMINI_API_KEY. Locally, add it to .dev.vars; in production, run `npx wrangler secret put GEMINI_API_KEY`.");
       const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY, httpOptions: { timeout: ATTEMPT_TIMEOUT_MS } });
       // Structured output. The ID lists are also constrained to the exact IDs in the
@@ -138,7 +138,7 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
       const fallback = (env.GEMINI_FALLBACK_MODEL ?? DEFAULT_FALLBACK_MODEL).trim();
       const out = await generateWithFallback(request, {
         primary: (env.GEMINI_MODEL || DEFAULT_MODEL).trim(),
-        fallback: fallback.toLowerCase() === "none" ? "" : fallback,
+        fallback: opts?.primaryOnly || fallback.toLowerCase() === "none" ? "" : fallback,
       });
       if (!out.text) throw new HttpError(502, "Gemini returned an empty answer. Try again.");
       return out;
