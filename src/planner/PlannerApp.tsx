@@ -10,7 +10,7 @@ import { Icon, Lumi, Stars } from "./ui";
 import { Link, PlannerView, pathForView, usePathname, viewFromPath } from "./router";
 import { LocalStore, PlannerStore, SupabaseStore } from "./store";
 import { usePlanner } from "./usePlanner";
-import { BlockScreen, GymScreen, HabitsScreen, ReviewScreen, ScreenProps, TodayScreen } from "./screens";
+import { BlockScreen, GymScreen, HabitsScreen, ReviewScreen, ScreenProps, SettingsScreen, TodayScreen } from "./screens";
 import "./planner.css";
 
 const NAV: { v: PlannerView; label: string }[] = [
@@ -29,6 +29,7 @@ const TITLES: Record<PlannerView, string> = {
   gym: "Gym",
   habits: "Habits",
   review: "Evening review",
+  settings: "Settings",
 };
 
 /** Dev only: /planner?date=2026-11-23 pretends today is that date (for testing gym days, rollover, etc.). */
@@ -203,11 +204,16 @@ export default function PlannerApp() {
           )}
           {store?.kind === "local" && <span className="mode">Local mode: saved on this device only</span>}
         </div>
-        {view !== "today" && (
-          <div className="lumi-float small">
-            <Lumi size={50} />
-          </div>
-        )}
+        <div className="hdr-side">
+          {view !== "today" && (
+            <div className="lumi-float small">
+              <Lumi size={50} />
+            </div>
+          )}
+          <Link to="/planner/settings" className="gear" aria-label="Settings">
+            <Icon name="settings" />
+          </Link>
+        </div>
       </header>
       <main className="p-main">
         {p.error && (
@@ -232,6 +238,8 @@ export default function PlannerApp() {
           <GymScreen {...props} />
         ) : view === "habits" ? (
           <HabitsScreen {...props} />
+        ) : view === "settings" ? (
+          <SettingsScreen {...props} />
         ) : (
           <React.Fragment key={today}>
             <ReviewScreen {...props} />

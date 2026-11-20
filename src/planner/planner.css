@@ -896,6 +896,162 @@ body:has(.planner) {
   color: #ffe7b3;
 }
 
+/* Header side: Lumi + settings gear */
+.planner .hdr-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+.planner .gear {
+  width: var(--tap);
+  height: var(--tap);
+  display: grid;
+  place-items: center;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--ink);
+}
+.planner a.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* Swap / edit workouts */
+.planner .link-btn {
+  align-self: flex-start;
+  min-height: var(--tap);
+  margin: -8px 0 -10px -8px;
+  padding: 0 8px;
+  background: none;
+  border: none;
+  color: #ffe7b3;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.planner .q-meta.swapped {
+  color: #bff3f0;
+}
+.planner .sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgba(6, 4, 24, 0.6);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.planner .sheet {
+  width: 100%;
+  max-width: 560px;
+  max-height: 80vh;
+  overflow: auto;
+  padding: 18px 16px calc(18px + env(safe-area-inset-bottom));
+  border-radius: 24px 24px 0 0;
+  background: linear-gradient(180deg, #2a1d63, #1a1245);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 -10px 40px rgba(4, 2, 20, 0.6);
+}
+.planner .sheet h2 {
+  font-size: 19px;
+  margin: 0 0 10px;
+}
+.planner .sheet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.planner .sheet-opt {
+  width: 100%;
+  min-height: var(--tap);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.planner .seg {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 22px;
+  background: rgba(10, 6, 40, 0.5);
+  margin-bottom: 10px;
+}
+.planner .seg button {
+  min-height: var(--tap);
+  border: none;
+  border-radius: 18px;
+  background: transparent;
+  color: #e3dafa;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.planner .seg button.on {
+  background: linear-gradient(180deg, #ffe7a8, #f2b98f);
+  color: var(--deep-ink);
+}
+.planner .edit-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.planner .edit-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: var(--tap);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.planner .edit-list li:first-child {
+  border-top: none;
+}
+.planner .edit-list .q-text {
+  flex: 1;
+  min-width: 0;
+}
+.planner .icon-btn {
+  width: var(--tap);
+  height: var(--tap);
+  flex: 0 0 var(--tap);
+  border-radius: 12px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink);
+  font-size: 18px;
+  cursor: pointer;
+}
+.planner .icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.planner .mw-block {
+  padding: 10px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.planner .mw-list {
+  margin: 6px 0;
+  padding-left: 22px;
+  color: #e3dafa;
+  font-size: 14px;
+}
+
 /* Reduced motion: decoration stops; state changes (fills, colours) still show. */
 @media (prefers-reduced-motion: reduce) {
   .planner .k-stars span,

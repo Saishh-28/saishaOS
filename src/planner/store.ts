@@ -9,6 +9,8 @@ import { toUUID } from "../supabaseSync";
 import { Block, HABITS, WATER_METRIC } from "./plan";
 import { DayLists, ImportPlan, ListItem, PlanTask } from "./logic";
 import type { ExerciseLog } from "./gym";
+import { parsePlanItems, PlanItem, planKey, PlanScope } from "./workouts";
+import type { WorkoutDay } from "./plan";
 
 export interface DayRecord {
   lists: DayLists;
@@ -23,6 +25,7 @@ export interface Snapshot {
   habits: Map<string, Record<string, boolean>>; // date -> habit key / gym tick -> done
   water: Map<string, number>; // date -> glasses
   exercises: Map<string, Record<string, ExerciseLog>>; // date -> exercise_key -> log
+  workoutPlans: Map<string, PlanItem[]>; // `${workout}|${scope}` -> your version of Day A / B
 }
 
 export interface PlannerStore {
@@ -41,6 +44,8 @@ export interface PlannerStore {
   setWater(date: string, glasses: number): Promise<void>;
   /** Gym exercises, cardio items and yoga poses (exercise_logs). */
   setExercise(date: string, key: string, log: ExerciseLog): Promise<void>;
+  /** Save (or with null, delete) your version of a workout for a scope ("always" or a date). */
+  setWorkoutPlan(workout: WorkoutDay, scope: PlanScope, items: PlanItem[] | null): Promise<void>;
   setNotes(date: string, notes: string | null): Promise<void>;
   importBackup(plan: ImportPlan): Promise<void>;
   /** Live sync: call `onChange` when another device changes this user's data. Returns unsubscribe. */
@@ -56,6 +61,7 @@ export const LIVE_TABLES = [
   "habit_logs",
   "exercise_logs",
   "health_logs",
+  "workout_plans",
 ] as const;
 
 export const emptySnapshot = (): Snapshot => ({
@@ -65,6 +71,7 @@ export const emptySnapshot = (): Snapshot => ({
   habits: new Map(),
   water: new Map(),
   exercises: new Map(),
+  workoutPlans: new Map(),
 });
 
 /** Habit keys stored in Sanctuary's health_logs instead of habit_logs. */
@@ -106,7 +113,7 @@ export class SupabaseStore implements PlannerStore {
 
   async load(): Promise<Snapshot> {
     const uid = this.userId;
-    const [tasks, days, items, done, habits, health, exercises] = await Promise.all([
+    const [tasks, days, items, done, habits, health, exercises, plans] = await Promise.all([
       this.sb.from("plan_tasks").select("*").eq("user_id", uid),
       this.sb.from("planner_days").select("*").eq("user_id", uid),
       this.sb.from("daily_list_items").select("*").eq("user_id", uid).order("position"),
@@ -117,7 +124,8 @@ export class SupabaseStore implements PlannerStore {
         .select("metric,value,logged_at")
         .eq("user_id", uid)
         .in("metric", [WATER_METRIC, ...HEALTH_METRIC_BY_KEY.values()]),
-      this.sb.from("exercise_logs").select("date,exercise_key,done,sets,reps,weight_kg").eq("user_id", uid),
+      this.sb.from("exercise_logs").select("*").eq("user_id", uid),
+      this.sb.from("workout_plans").select("workout,scope,items").eq("user_id", uid),
     ]);
     for (const [r, what] of [
       [tasks, "plan_tasks"],
@@ -131,6 +139,8 @@ export class SupabaseStore implements PlannerStore {
     // Gym logs are optional for loading: if the exercise_logs migration hasn't
     // run yet, the rest of the planner still works (saving a gym tick will say so).
     if (exercises.error) console.warn("[planner] exercise_logs unavailable:", exercises.error.message);
+    // Same for workout_plans (Part B migration): without it you get the default workouts.
+    if (plans.error) console.warn("[planner] workout_plans unavailable:", plans.error.message);
 
     const snap = emptySnapshot();
     snap.tasks = (tasks.data ?? []).map((r: any) => ({
@@ -162,7 +172,12 @@ export class SupabaseStore implements PlannerStore {
         sets: r.sets,
         reps: r.reps,
         weightKg: r.weight_kg == null ? null : Number(r.weight_kg),
+        plannedKey: r.planned_key ?? null,
       });
+    for (const r of plans.data ?? []) {
+      const list = parsePlanItems(r.items);
+      if (list && (r.workout === "A" || r.workout === "B")) snap.workoutPlans.set(planKey(r.workout, r.scope), list);
+    }
     return snap;
   }
 
@@ -274,9 +289,23 @@ export class SupabaseStore implements PlannerStore {
         sets: log.sets,
         reps: log.reps,
         weight_kg: log.weightKg,
+        planned_key: log.plannedKey ?? null,
       }),
       "Saving exercise",
     );
+  }
+
+  async setWorkoutPlan(workout: WorkoutDay, scope: PlanScope, items: PlanItem[] | null) {
+    if (items)
+      check(
+        await this.sb.from("workout_plans").upsert({ user_id: this.userId, workout, scope, items }),
+        "Saving your workout",
+      );
+    else
+      check(
+        await this.sb.from("workout_plans").delete().eq("user_id", this.userId).eq("workout", workout).eq("scope", scope),
+        "Resetting your workout",
+      );
   }
 
   async setNotes(date: string, notes: string | null) {
@@ -362,6 +391,7 @@ type Serialized = {
   habits: [string, Record<string, boolean>][];
   water: [string, number][];
   exercises?: [string, Record<string, ExerciseLog>][];
+  workoutPlans?: [string, PlanItem[]][];
 };
 
 export class LocalStore implements PlannerStore {
@@ -382,6 +412,7 @@ export class LocalStore implements PlannerStore {
           habits: new Map(s.habits),
           water: new Map(s.water),
           exercises: new Map(s.exercises ?? []),
+          workoutPlans: new Map(s.workoutPlans ?? []),
         };
       }
     } catch (e) {
@@ -398,6 +429,7 @@ export class LocalStore implements PlannerStore {
       habits: [...this.snap.habits],
       water: [...this.snap.water],
       exercises: [...this.snap.exercises],
+      workoutPlans: [...this.snap.workoutPlans],
     };
     this.storage.setItem(LOCAL_KEY, JSON.stringify(s));
   }
@@ -447,6 +479,11 @@ export class LocalStore implements PlannerStore {
   }
   async setExercise(date: string, key: string, log: ExerciseLog) {
     setIn(this.snap.exercises, date, key, log);
+    this.save();
+  }
+  async setWorkoutPlan(workout: WorkoutDay, scope: PlanScope, items: PlanItem[] | null) {
+    if (items) this.snap.workoutPlans.set(planKey(workout, scope), items);
+    else this.snap.workoutPlans.delete(planKey(workout, scope));
     this.save();
   }
   async setNotes(date: string, notes: string | null) {

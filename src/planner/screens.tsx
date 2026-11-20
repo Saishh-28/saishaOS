@@ -25,6 +25,28 @@ import {
   timerSegments,
   timerState,
 } from "./gym";
+import {
+  addItem,
+  alternativesFor,
+  CATALOGUE,
+  CatalogueEntry,
+  CUSTOM_NAME_MAX,
+  customKey,
+  itemDetails,
+  MAX_ITEMS,
+  moveItem,
+  PlanItem,
+  removeItem,
+  sessionWithPlans,
+  swapItem,
+  ALWAYS,
+  defaultPlan,
+  PlanChange,
+  planChanges,
+  planKey,
+  undoChange,
+} from "./workouts";
+import type { WorkoutDay } from "./plan";
 import { buildReport, reportToText } from "./report";
 import type { NewAiTask, RejectedItem, ValidatedPlan } from "./validate";
 import { supabase } from "../supabase";
@@ -409,6 +431,176 @@ function YogaTimerPanel({ item, onFinish, onStop }: { item: GymItem; onFinish: (
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Swap / edit workouts (Part B)                                       */
+/* ------------------------------------------------------------------ */
+
+type Pick = { key: string; name?: string };
+
+/** Bottom sheet: pick an exercise (alternatives or "Other…"), then "Just today" / "Always". */
+function ExerciseSheet({
+  title,
+  options,
+  askScope,
+  onDone,
+  onClose,
+}: {
+  title: string;
+  options: CatalogueEntry[];
+  /** Ask "Just today" / "Always" after picking (false = the caller already knows). */
+  askScope: boolean;
+  onDone: (pick: Pick, scope: "today" | "always") => void;
+  onClose: () => void;
+}) {
+  const [picked, setPicked] = useState<Pick | null>(null);
+  const [other, setOther] = useState("");
+  const choose = (pick: Pick) => (askScope ? setPicked(pick) : onDone(pick, "today"));
+  const pickedName = picked ? picked.name ?? CATALOGUE.get(picked.key)?.name ?? picked.key : "";
+  return (
+    <div className="sheet-backdrop" role="presentation" onClick={onClose}>
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
+        <h2>{picked ? `Use ${pickedName}` : title}</h2>
+        {!picked ? (
+          <>
+            <ul className="sheet-list">
+              {options.map((o) => (
+                <li key={o.key}>
+                  <Btn className="sheet-opt" onClick={() => choose({ key: o.key })}>
+                    <b>{o.name}</b>
+                    <span className="muted">{o.plan}</span>
+                  </Btn>
+                </li>
+              ))}
+            </ul>
+            <form
+              className="row"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const name = other.trim().slice(0, CUSTOM_NAME_MAX);
+                const key = customKey(name);
+                if (key) choose({ key, name });
+              }}
+            >
+              <input
+                type="text"
+                placeholder="Other…"
+                aria-label="Other exercise name"
+                maxLength={CUSTOM_NAME_MAX}
+                value={other}
+                onChange={(e) => setOther(e.target.value)}
+              />
+              <Btn className="btn" disabled={!customKey(other)}>
+                Use
+              </Btn>
+            </form>
+          </>
+        ) : (
+          <div className="row">
+            <Btn className="btn" onClick={() => onDone(picked, "today")}>
+              Just today
+            </Btn>
+            <Btn className="btn ghost" onClick={() => onDone(picked, "always")}>
+              Always swap
+            </Btn>
+          </div>
+        )}
+        <div className="row">
+          <Btn className="btn ghost wide" onClick={onClose}>
+            Cancel
+          </Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Edit mode: reorder, remove, add. Changes apply to this day or always (toggle). */
+function EditWorkout({
+  p,
+  w,
+  day,
+  plan,
+  toast,
+  onClose,
+}: {
+  p: Planner;
+  w: WorkoutDay;
+  day: string;
+  plan: PlanItem[];
+  toast: (m: string) => void;
+  onClose: () => void;
+}) {
+  const [scope, setScope] = useState<"today" | "always">("today");
+  const [adding, setAdding] = useState(false);
+  const apply = (fn: (l: PlanItem[]) => PlanItem[]) => p.editWorkout(w, day, scope, fn);
+  const present = new Set(plan.map((i) => i.key));
+  return (
+    <div className="card edit-workout">
+      <h2>
+        Edit Day {w} <span className="sub">{scope === "today" ? `only ${longDate(day)}` : "every Day " + w}</span>
+      </h2>
+      <div className="seg" role="group" aria-label="Apply changes to">
+        <Btn className={scope === "today" ? "on" : ""} aria-pressed={scope === "today"} onClick={() => setScope("today")}>
+          Just this day
+        </Btn>
+        <Btn className={scope === "always" ? "on" : ""} aria-pressed={scope === "always"} onClick={() => setScope("always")}>
+          Always
+        </Btn>
+      </div>
+      <ul className="edit-list">
+        {plan.map((it, i) => {
+          const name = itemDetails(it).name;
+          return (
+            <li key={it.key}>
+              <span className="q-text">{name}</span>
+              <Btn className="icon-btn" aria-label={`Move ${name} up`} disabled={i === 0} onClick={() => apply((l) => moveItem(l, i, -1))}>
+                ↑
+              </Btn>
+              <Btn className="icon-btn" aria-label={`Move ${name} down`} disabled={i === plan.length - 1} onClick={() => apply((l) => moveItem(l, i, 1))}>
+                ↓
+              </Btn>
+              <Btn
+                className="icon-btn"
+                aria-label={`Remove ${name}`}
+                disabled={plan.length <= 1}
+                onClick={() => {
+                  apply((l) => removeItem(l, i));
+                  toast(`${name} removed ${scope === "today" ? "for this day" : "from every Day " + w}`);
+                }}
+              >
+                ×
+              </Btn>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="row">
+        <Btn className="btn dashed wide" disabled={plan.length >= MAX_ITEMS} onClick={() => setAdding(true)}>
+          + Add an exercise
+        </Btn>
+      </div>
+      <div className="row">
+        <Btn className="btn wide" onClick={onClose}>
+          Done
+        </Btn>
+      </div>
+      {adding && (
+        <ExerciseSheet
+          title="Add an exercise"
+          options={[...CATALOGUE.values()].filter((e) => !present.has(e.key))}
+          askScope={false}
+          onClose={() => setAdding(false)}
+          onDone={(pick) => {
+            apply((l) => addItem(l, pick));
+            setAdding(false);
+            toast(`Added ${pick.name ?? CATALOGUE.get(pick.key)?.name} ${scope === "today" ? "for this day" : "to every Day " + w}`);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 export function GymScreen({ p, today, toast }: ScreenProps) {
   // The day being shown: today by default; tap another day in the week strip to see it.
   // Past days can still be ticked (catch up on a forgotten log); future days are a preview.
@@ -416,18 +608,26 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
   useEffect(() => setDay(today), [today]);
   const isToday = day === today;
   const future = day > today;
-  const session = sessionFor(day);
+  const session = sessionWithPlans(day, p.workoutPlans);
   const logs = p.exercisesFor(day);
   const all = p.snap!.exercises;
   const [active, setActive] = useState<string | null>(null);
-  useEffect(() => setActive(null), [day]);
+  const [swapping, setSwapping] = useState<number | null>(null);
+  const [editing, setEditing] = useState(false);
+  useEffect(() => {
+    setActive(null);
+    setSwapping(null);
+    setEditing(false);
+  }, [day]);
+  const w = session.workout;
   const doneCount = session.items.filter((i) => logs[i.key]?.done).length;
   const habits = p.habitsFor(day);
 
+  const plannedOf = (key: string) => session.plan.find((i) => i.key === key)?.planned ?? null;
   const tick = (item: GymItem, checked: boolean) => {
     if (future) return;
     if (checked) playTick(p, today);
-    const completed = p.setExercise(session, item.key, { done: checked, sets: item.sets ?? null }, day);
+    const completed = p.setExercise(session, item.key, { done: checked, sets: item.sets ?? null, plannedKey: plannedOf(item.key) }, day);
     if (completed) {
       sfx.blockComplete();
       toast(`${session.title} done. Gym habit ticked ✨`);
@@ -474,9 +674,13 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
         </div>
       )}
 
-      {session.items.length > 0 && (
+      {editing && w && <EditWorkout p={p} w={w} day={day} plan={session.plan} toast={toast} onClose={() => setEditing(false)} />}
+
+      {session.items.length > 0 && !editing && (
         <ul className="quests">
-          {session.items.map((item) => {
+          {session.items.map((item, index) => {
+            const planned = session.plan[index]?.planned;
+            const swappedFrom = session.kind === "strength" && planned && planned !== item.key ? CATALOGUE.get(planned)?.name : null;
             const log = logs[item.key];
             const done = !!log?.done;
             const last = item.weighted ? lastWeight(all, item.key, day) : null;
@@ -497,6 +701,12 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
                     {item.plan}
                     {item.weighted && ` · Last: ${last ? formatKg(last.weightKg) : "–"}`}
                   </span>
+                  {swappedFrom && <span className="q-meta swapped">instead of {swappedFrom}</span>}
+                  {session.kind === "strength" && (
+                    <button className="link-btn" onClick={() => setSwapping(index)} aria-label={`Swap ${item.name}`}>
+                      ⇄ Swap
+                    </button>
+                  )}
                 </div>
                 {pb && <span className="chip gold">NEW BEST</span>}
                 {item.weighted && !future && (
@@ -508,7 +718,8 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
                         toast("Weight should be a number like 22.5");
                         return false;
                       }
-                      if (kg !== (log?.weightKg ?? null)) p.setExercise(session, item.key, { weightKg: kg, sets: item.sets ?? null }, day);
+                      if (kg !== (log?.weightKg ?? null))
+                        p.setExercise(session, item.key, { weightKg: kg, sets: item.sets ?? null, plannedKey: plannedOf(item.key) }, day);
                       return true;
                     }}
                   />
@@ -529,6 +740,33 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
             );
           })}
         </ul>
+      )}
+      {swapping !== null && w && session.items[swapping] && (
+        <ExerciseSheet
+          title={`Swap ${session.items[swapping].name}`}
+          options={alternativesFor(session.plan[swapping].planned ?? session.items[swapping].key).filter(
+            (o) => !session.plan.some((it) => it.key === o.key),
+          )}
+          askScope
+          onClose={() => setSwapping(null)}
+          onDone={(pick, scope) => {
+            const from = session.items[swapping].name;
+            p.editWorkout(w, day, scope, (l) => swapItem(l, swapping, pick));
+            setSwapping(null);
+            const to = pick.name ?? CATALOGUE.get(pick.key)?.name ?? pick.key;
+            toast(scope === "today" ? `${to} instead of ${from}, just this day` : `${to} instead of ${from}, every Day ${w}`);
+          }}
+        />
+      )}
+      {session.kind === "strength" && !editing && (
+        <div className="row">
+          <Btn className="btn ghost" onClick={() => setEditing(true)}>
+            Edit workout
+          </Btn>
+          <Link to="/planner/settings" className="btn ghost">
+            My workouts
+          </Link>
+        </div>
       )}
       {habits.gym && session.kind !== "rest" && <div className="note">Gym habit ticked for today ✨</div>}
       {session.kind === "strength" && (
@@ -803,7 +1041,14 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
         <AiPlanner p={p} today={today} notes={notes} toast={toast} />
       </div>
 
-      <SoundCard />
+      <div className="card">
+        <h2>Settings</h2>
+        <div className="row" style={{ marginTop: 0 }}>
+          <Link to="/planner/settings" className="btn ghost">
+            Sound, vibration and my workouts
+          </Link>
+        </div>
+      </div>
 
       <div className="card">
         <h2>Export for Python</h2>
@@ -1062,5 +1307,109 @@ function AiPlanner({ p, today, notes, toast }: { p: Planner; today: string; note
         </div>
       )}
     </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Settings: My workouts + sound                                       */
+/* ------------------------------------------------------------------ */
+
+function changeText(c: PlanChange): string {
+  const n = (k: string, name?: string) => name ?? CATALOGUE.get(k)?.name ?? k;
+  switch (c.kind) {
+    case "swapped":
+      return `${n(c.key, c.name)} instead of ${n(c.planned)}`;
+    case "added":
+      return `Added ${n(c.key, c.name)}`;
+    case "removed":
+      return `Removed ${n(c.planned)}`;
+    case "reordered":
+      return "Order changed";
+  }
+}
+
+function MyWorkouts({ p, today, toast }: { p: Planner; today: string; toast: (m: string) => void }) {
+  const plans = p.workoutPlans;
+  return (
+    <div className="card">
+      <h2>My workouts</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        Your permanent changes ("Always swap") and changes for one day. Undo anything here.
+      </p>
+      {(["A", "B"] as WorkoutDay[]).map((w) => {
+        const permanent = plans.get(planKey(w, ALWAYS));
+        const changes = permanent ? planChanges(w, permanent) : [];
+        const oneDay = [...plans.keys()]
+          .filter((k) => k.startsWith(w + "|") && k !== planKey(w, ALWAYS))
+          .map((k) => k.split("|")[1])
+          .filter((d) => d >= today)
+          .sort();
+        return (
+          <div key={w} className="mw-block">
+            <b>Day {w}</b>
+            <ol className="mw-list">
+              {(permanent ?? defaultPlan(w)).map((it) => (
+                <li key={it.key}>{itemDetails(it).name}</li>
+              ))}
+            </ol>
+            {!changes.length && <div className="muted">Same as the default plan.</div>}
+            <ul className="tasks">
+              {changes.map((c, i) => (
+                <li key={i}>
+                  <span className="txt">{changeText(c)}</span>
+                  <Btn
+                    className="btn ghost"
+                    onClick={() => {
+                      p.editWorkout(w, today, "always", (l) => undoChange(w, l, c));
+                      toast("Undone");
+                    }}
+                  >
+                    Undo
+                  </Btn>
+                </li>
+              ))}
+            </ul>
+            {changes.length > 1 && (
+              <div className="row">
+                <Btn
+                  className="btn ghost"
+                  onClick={() => {
+                    p.editWorkout(w, today, "always", () => defaultPlan(w));
+                    toast(`Day ${w} is back to the default`);
+                  }}
+                >
+                  Reset Day {w} to default
+                </Btn>
+              </div>
+            )}
+            {oneDay.map((d) => (
+              <div key={d} className="row" style={{ alignItems: "center" }}>
+                <span className="muted" style={{ flex: 1 }}>
+                  Changed just for {longDate(d)}
+                </span>
+                <Btn
+                  className="btn ghost"
+                  onClick={() => {
+                    p.editWorkout(w, d, "today", () => plans.get(planKey(w, ALWAYS)) ?? defaultPlan(w));
+                    toast("Back to your usual Day " + w);
+                  }}
+                >
+                  Undo
+                </Btn>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export function SettingsScreen({ p, today, toast }: ScreenProps) {
+  return (
+    <>
+      <MyWorkouts p={p} today={today} toast={toast} />
+      <SoundCard />
+    </>
   );
 }

@@ -23,7 +23,7 @@ Data syncs to Supabase when you're signed in, and falls back to `localStorage` w
 - **Backend:** one Cloudflare Worker ([`worker.ts`](worker.ts)) that serves the static build and the `/api/*` routes
 - **Database and auth:** Supabase (Postgres with Row Level Security on every table; Google and email sign-in)
 - **AI:** Google Gemini via `@google/genai`, called only from the Worker
-- **Tests:** Vitest (74 tests)
+- **Tests:** Vitest (95 tests)
 
 ## Project structure
 
@@ -35,6 +35,7 @@ src/planner/                   Daily Planner
   plan.ts                      Plan data: phases, DEEP/STUDY queues, habits, schedule, workouts
   logic.ts                     Pure logic: rollover, fill to 5, gym rotation, CSV, backup import
   gym.ts                       Gym sessions by weekday, yoga timer, weights, India time
+  workouts.ts                  Exercise catalogue, swaps, your own Day A / B (just today or always)
   sound.ts                     Sounds (Web Audio) and vibration, with settings
   ui.tsx                       Enchanted Kingdom look: stars, Lumi, orb ticks, bouncy buttons
   validate.ts                  Anti-hallucination validation for AI plans
@@ -113,6 +114,7 @@ In **Authentication → URL Configuration**:
 | `/planner/gym` | Today's session: strength (Mon/Wed/Fri), cardio + core (Tue/Thu), yoga (Sat), rest (Sun) |
 | `/planner/habits` | Habits, water and the last 7 days |
 | `/planner/review` | Evening review, CSV export, prototype backup import |
+| `/planner/settings` | My workouts (undo swaps), sound and vibration |
 
 Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at `/planner`, with shortcuts to Deep, Study, Habits and Review.
 
@@ -122,6 +124,7 @@ Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at 
 - **Your own actions:** tick a task done, remove it from today (plan tasks go back into the queue; your own tasks are deleted), add your own task, or **pull the next task** (from a future phase if the current one is empty).
 - **Habits:** water and skincare AM/PM share Sanctuary's `health_logs` rows, so both screens always show the same value. The other habits and gym ticks use `habit_logs`.
 - **Gym:** Mon/Wed/Fri strength (odd ISO weeks A, B, A; even ISO weeks B, A, B), Tue/Thu cardio + core, Sat yoga, Sun rest. Each strength exercise has an optional kg box and shows "Last: …" from the previous session. Each yoga pose has a Start button and a countdown that cues "switch sides" at half time. Ticking every item of the day's session ticks the gym habit. Sunday needs no gym tick (it isn't counted in progress, the CSV or the report).
+- **Swapping exercises:** every strength exercise has **⇄ Swap** (alternatives for the same muscle group, or "Other…"), then **Just today** or **Always swap**. **Edit workout** reorders, adds or removes exercises for that day or always. Logs store the exercise you actually did (`exercise_key`) and the one it replaced (`planned_key`), so "Last: X kg" and NEW BEST follow what you did. Undo permanent changes in Settings → My workouts.
 - **Time zone:** "today" is always India time (Asia/Kolkata), whatever the device is set to.
 - **Live sync:** the planner listens to Supabase Realtime, so a tick on the phone shows on the laptop within about a second. It also refetches when the app comes back to the foreground.
 - **Sounds:** the Nth tick of the day plays `tick-N` (6+ = `tick-6`), then `xp-sparkle`. A finished block plays `block-complete`, approving the evening review plays `good-night`, and the first tap before noon plays `wake-up` once a day. Nothing plays before the first tap. Sound on/off, volume (default 70%) and vibration are on the Review screen, saved per device.
@@ -137,7 +140,8 @@ Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at 
 | `daily_list_items` | Each day's deep/study list; the database refuses a task listed under the wrong block |
 | `task_completions` | Which tasks are done, and on which date |
 | `habit_logs` | Habits without an existing home (including the after-meal walks); old prototype gym ticks |
-| `exercise_logs` | Gym exercises, cardio items and yoga poses per day: done, sets, reps, optional weight |
+| `exercise_logs` | Gym exercises, cardio items and yoga poses per day: done, sets, reps, optional weight, and the planned exercise it replaced |
+| `workout_plans` | Your own Day A / Day B: `scope` is `always` or one date; `items` is the ordered exercise list |
 
 Every table has RLS: `auth.uid() = user_id` for both reads and writes. The app adds the plan tasks for a user the first time they open `/planner`.
 
