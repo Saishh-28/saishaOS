@@ -5,7 +5,7 @@
  */
 import React, { useEffect, useState } from "react";
 
-export const PLANNER_VIEWS = ["today", "deep", "study", "gym", "habits", "review"] as const;
+export const PLANNER_VIEWS = ["today", "deep", "study", "gym", "habits", "review", "settings"] as const;
 export type PlannerView = (typeof PLANNER_VIEWS)[number];
 
 const NAV_EVENT = "planner:navigate";
