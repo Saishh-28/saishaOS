@@ -2,7 +2,8 @@
  * Evening review report. Pure, shared by the Review screen and (Stage 3) the
  * Worker, which rebuilds it from the database rather than trusting the client.
  */
-import { BLOCKS, Block, WATER_MAX } from "./plan";
+import { BLOCKS, Block } from "./plan";
+import { litres } from "./water";
 import { addDays, Completions, DayLists, habitsOn, PlanTask, queueFor, upcoming } from "./logic";
 
 export interface ReportTask {
@@ -24,11 +25,19 @@ export interface DailyReport {
   blocks: Record<Block, ReportBlock>;
   habitsDone: string[];
   habitsMissed: string[];
+  /** ml */
   water: number;
+  /** This week's goal in ml, when known. */
+  waterGoalMl: number | null;
   notes: string;
 }
 
 export const REPORT_NEXT_COUNT = 8;
+
+/** "1.25 L of 1.5 L goal" */
+export function waterText(r: Pick<DailyReport, "water" | "waterGoalMl">): string {
+  return r.waterGoalMl ? `${litres(r.water)} of ${litres(r.waterGoalMl)} goal` : litres(r.water);
+}
 
 export function buildReport(args: {
   date: string;
@@ -37,6 +46,7 @@ export function buildReport(args: {
   done: Completions;
   habits: Readonly<Record<string, boolean>>;
   water: number;
+  waterGoalMl?: number | null;
   notes?: string | null;
 }): DailyReport {
   const { date, lists, tasks, done, habits } = args;
@@ -64,6 +74,7 @@ export function buildReport(args: {
     habitsDone: habitsOn(date).filter((h) => habits[h.key]).map((h) => h.label),
     habitsMissed: habitsOn(date).filter((h) => !habits[h.key]).map((h) => h.label),
     water: args.water,
+    waterGoalMl: args.waterGoalMl ?? null,
     notes: (args.notes ?? "").trim(),
   };
 }
@@ -82,7 +93,7 @@ export function reportToText(r: DailyReport): string {
     x.next.forEach((t) => L.push(`  ${t.id} | ${t.text}${t.future ? ` (future phase, starts ${t.phaseStart})` : ""}`));
     L.push("");
   }
-  L.push(`HABITS: ${r.habitsDone.length}/${r.habitsDone.length + r.habitsMissed.length} · water ${r.water}/${WATER_MAX} glasses`);
+  L.push(`HABITS: ${r.habitsDone.length}/${r.habitsDone.length + r.habitsMissed.length} · water ${waterText(r)}`);
   if (r.habitsMissed.length) L.push(`  Missed: ${r.habitsMissed.join("; ")}`);
   L.push("", `MY NOTES FOR TOMORROW: ${r.notes || "(none)"}`);
   return L.join("\n");

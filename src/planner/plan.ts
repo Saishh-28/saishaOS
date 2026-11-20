@@ -167,8 +167,9 @@ export const HABITS: Habit[] = [
   { key: "phone", label: "Phone away by 9:30", store: { kind: "habit" } },
 ];
 
-/** Water lives in Sanctuary's health_logs row (metric water_cups). */
-export const WATER_METRIC = "water_cups";
+/** Water lives in Sanctuary's health_logs row, in millilitres (see water.ts). */
+export const WATER_METRIC = "water_ml";
+/** Glasses in the prototype's backups (only used to import them). */
 export const WATER_MAX = 8;
 
 export type ScheduleLink = Block | "gym" | "habits" | "review" | null;

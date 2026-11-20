@@ -2,6 +2,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { GoogleGenAI, Type } from "@google/genai";
 import { AI_MAX_PER_BLOCK, Block, HABITS, WATER_METRIC } from "../../src/planner/plan";
+import { waterGoal } from "../../src/planner/water";
 import { addDays, DayLists, PlanTask } from "../../src/planner/logic";
 import { HttpError, PlannerDeps, ReviewData, SaveRequest } from "./api";
 import { ATTEMPT_TIMEOUT_MS, DEFAULT_FALLBACK_MODEL, DEFAULT_MODEL, generateWithFallback } from "./gemini";
@@ -49,13 +50,16 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
     async loadData(userId, date): Promise<ReviewData> {
       const s = client();
       const healthMetrics = [WATER_METRIC, ...HABITS.flatMap((h) => (h.store.kind === "health" ? [h.store.metric] : []))];
-      const [tasks, done, items, habits, health, tomorrow] = await Promise.all([
+      const [tasks, done, items, habits, health, tomorrow, waterHistory, goalStart] = await Promise.all([
         s.from("plan_tasks").select("id,block,text,phase_start,sort_order,is_custom,is_ai").eq("user_id", userId),
         s.from("task_completions").select("task_id,done_date").eq("user_id", userId),
         s.from("daily_list_items").select("block,task_id,carried_over,position").eq("user_id", userId).eq("date", date).order("position"),
         s.from("habit_logs").select("habit_key,done").eq("user_id", userId).eq("date", date),
         s.from("health_logs").select("metric,value").eq("user_id", userId).in("metric", healthMetrics).eq("logged_at", `${date}T12:00:00Z`),
         s.from("daily_list_items").select("task_id", { count: "exact", head: true }).eq("user_id", userId).eq("date", addDays(date, 1)),
+        // For this week's water goal (see water.ts): water history + when the goal started.
+        s.from("health_logs").select("value,logged_at").eq("user_id", userId).eq("metric", WATER_METRIC),
+        s.from("user_settings").select("value").eq("user_id", userId).eq("key", "water_goal_start").maybeSingle(),
       ]);
       for (const [r, w] of [[tasks, "plan_tasks"], [done, "task_completions"], [items, "daily_list_items"], [habits, "habit_logs"], [health, "health_logs"], [tomorrow, "tomorrow"]] as const)
         check(r, `Loading ${w}`);
@@ -65,6 +69,9 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
       const habitMap: Record<string, boolean> = {};
       for (const r of habits.data ?? []) habitMap[r.habit_key] = r.done;
       let water = 0;
+      const history = new Map<string, number>((waterHistory.data ?? []).map((r: any) => [String(r.logged_at).slice(0, 10), Number(r.value) || 0]));
+      const start = typeof goalStart.data?.value === "string" ? goalStart.data.value : null;
+      const waterGoalMl = start ? waterGoal(history, start, date).goalMl : null;
       for (const r of health.data ?? []) {
         if (r.metric === WATER_METRIC) water = Number(r.value) || 0;
         const h = HABITS.find((x) => x.store.kind === "health" && x.store.metric === r.metric);
@@ -86,6 +93,7 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
         lists,
         habits: habitMap,
         water,
+        waterGoalMl,
         tomorrowHasList: (tomorrow.count ?? 0) > 0,
       };
     },

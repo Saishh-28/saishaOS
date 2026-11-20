@@ -23,7 +23,7 @@ Data syncs to Supabase when you're signed in, and falls back to `localStorage` w
 - **Backend:** one Cloudflare Worker ([`worker.ts`](worker.ts)) that serves the static build and the `/api/*` routes
 - **Database and auth:** Supabase (Postgres with Row Level Security on every table; Google and email sign-in)
 - **AI:** Google Gemini via `@google/genai`, called only from the Worker
-- **Tests:** Vitest (95 tests)
+- **Tests:** Vitest (104 tests)
 
 ## Project structure
 
@@ -36,6 +36,7 @@ src/planner/                   Daily Planner
   logic.ts                     Pure logic: rollover, fill to 5, gym rotation, CSV, backup import
   gym.ts                       Gym sessions by weekday, yoga timer, weights, India time
   workouts.ts                  Exercise catalogue, swaps, your own Day A / B (just today or always)
+  water.ts                     Water in ml: bottle, anchors, other drinks, gradual weekly goal
   sound.ts                     Sounds (Web Audio) and vibration, with settings
   ui.tsx                       Enchanted Kingdom look: stars, Lumi, orb ticks, bouncy buttons
   validate.ts                  Anti-hallucination validation for AI plans
@@ -123,6 +124,7 @@ Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at 
 - **First time a day is opened:** unfinished tasks from the most recent previous day are carried over (marked "↻ from yesterday"). The list is then filled from the plan queue, in order, up to 5 tasks. Only tasks whose phase has started and that aren't done are used.
 - **Your own actions:** tick a task done, remove it from today (plan tasks go back into the queue; your own tasks are deleted), add your own task, or **pull the next task** (from a future phase if the current one is empty).
 - **Habits:** water and skincare AM/PM share Sanctuary's `health_logs` rows, so both screens always show the same value. The other habits and gym ticks use `habit_logs`.
+- **Water (no reminders):** tracked in ml (`health_logs` metric `water_ml`). One tap for "Finished a bottle" (bottle size in Settings), "+250 ml glass", or other drinks (chaas, coconut water, nimbu pani, herbal tea, soup). **Water anchors** on Today tie a glass to things you already do (after waking, before meals, refill at each deep-work block, after the walk with Dad); each ticked anchor adds 250 ml unless its "from my bottle" toggle is on. The goal starts at 1.25 L and rises 0.25 L after every week with 5 days at the goal, up to 2 L. The Moonlit Garden fountain fills up; reaching the goal plays a sparkle. Missed days are never mentioned.
 - **Gym:** Mon/Wed/Fri strength (odd ISO weeks A, B, A; even ISO weeks B, A, B), Tue/Thu cardio + core, Sat yoga, Sun rest. Each strength exercise has an optional kg box and shows "Last: …" from the previous session. Each yoga pose has a Start button and a countdown that cues "switch sides" at half time. Ticking every item of the day's session ticks the gym habit. Sunday needs no gym tick (it isn't counted in progress, the CSV or the report).
 - **Swapping exercises:** every strength exercise has **⇄ Swap** (alternatives for the same muscle group, or "Other…"), then **Just today** or **Always swap**. **Edit workout** reorders, adds or removes exercises for that day or always. Logs store the exercise you actually did (`exercise_key`) and the one it replaced (`planned_key`), so "Last: X kg" and NEW BEST follow what you did. Undo permanent changes in Settings → My workouts.
 - **Time zone:** "today" is always India time (Asia/Kolkata), whatever the device is set to.
@@ -140,6 +142,7 @@ Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at 
 | `daily_list_items` | Each day's deep/study list; the database refuses a task listed under the wrong block |
 | `task_completions` | Which tasks are done, and on which date |
 | `habit_logs` | Habits without an existing home (including the after-meal walks); old prototype gym ticks |
+| `user_settings` | Small preferences per user: bottle size, when the water goal started, "from my bottle" anchors |
 | `exercise_logs` | Gym exercises, cardio items and yoga poses per day: done, sets, reps, optional weight, and the planned exercise it replaced |
 | `workout_plans` | Your own Day A / Day B: `scope` is `always` or one date; `items` is the ordered exercise list |
 
@@ -161,7 +164,8 @@ Tests prove it: `src/planner/validate.test.ts` and `worker/planner/api.test.ts` 
 
 ## Known issues / tech debt
 
-- **`health_logs` row IDs aren't per user.** Sanctuary (and the planner, to share rows) builds them from the date and metric only, via a 32-bit hash in `toUUID`. Two accounts would collide. To be fixed on `fix/ai-chat` by including the user ID.
+- **`journal_entries` row IDs aren't per user.** Sanctuary builds them from the date only (`toUUID("journal-" + date)`), so two accounts could collide. (`health_logs` had the same problem; it's fixed: rows are matched on `(user_id, metric, logged_at)`.)
+- **Old `water_cups` rows are kept** after converting them to `water_ml`; nothing reads them any more. They can be deleted later.
 - **AI chat bugs (`/api/saisha/interact`).** The live handler reads `role`/`content`, but the app sends `sender`/`text`, and its task inserts use columns that don't exist. To be fixed on `fix/ai-chat`.
 - **Legacy files.** [`server.ts`](server.ts) (old AI Studio Express server, `npm run dev:express-legacy`) and the Pages Functions layout in `functions/` are legacy. `functions/api/saisha/interact.ts` is still imported by `worker.ts` until it moves into `worker/`. `assets/.aistudio` and `metadata.json` are AI Studio leftovers.
 - **Approving tomorrow's list isn't atomic.** It's several Supabase calls; a failure halfway could leave a partial list. Approving again fixes it. A Postgres function would make it atomic.

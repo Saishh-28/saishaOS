@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { Block, SCHEDULE, WATER_MAX } from "./plan";
+import { Block, SCHEDULE } from "./plan";
+import { ANCHORS, anchorMl, daysAtGoalThisWeek, DRINKS, GLASS_ML, litres, waterMilestone } from "./water";
 import {
   addDays,
   csvRows,
@@ -47,13 +48,13 @@ import {
   undoChange,
 } from "./workouts";
 import type { WorkoutDay } from "./plan";
-import { buildReport, reportToText } from "./report";
+import { buildReport, reportToText, waterText } from "./report";
 import type { NewAiTask, RejectedItem, ValidatedPlan } from "./validate";
 import { supabase } from "../supabase";
 import { Link, pathForView } from "./router";
 import type { Planner } from "./usePlanner";
 import { sfx } from "./sound";
-import { Btn, Lumi, Orb, Progress } from "./ui";
+import { Btn, Fountain, Lumi, Orb, Progress, sparkleFrom } from "./ui";
 
 export interface ScreenProps {
   p: Planner;
@@ -98,10 +99,10 @@ function lumiLine(args: { pct: number; tasksLeft: number; habitsLeft: number; mi
   return `${q(tasksLeft, "quest")} and ${q(habitsLeft, "habit")} to go today. One at a time.`;
 }
 
-export function TodayScreen({ p, today, minutes }: ScreenProps) {
+export function TodayScreen({ p, today, minutes, toast }: ScreenProps) {
   const habits = p.habitsFor(today);
   const snap = p.snap!;
-  const prog = dayProgress({ lists: p.lists, done: snap.done, habits, water: p.water, date: today });
+  const prog = dayProgress({ lists: p.lists, done: snap.done, habits, water: p.water, waterGoalMl: p.waterGoalMl, date: today });
   const cur = currentSlotIndex(minutes);
   const nextDeep = p.lists.deep.find((i) => !snap.done.has(i.taskId));
   const nextStudy = p.lists.study.find((i) => !snap.done.has(i.taskId));
@@ -128,6 +129,7 @@ export function TodayScreen({ p, today, minutes }: ScreenProps) {
         <Progress pct={prog.pct} label="Today's progress" />
         <div className="muted">Minimum for a bad day: one deep-work task. Never miss twice.</div>
       </div>
+      <AnchorsCard p={p} today={today} toast={toast} />
       <div className="card summary">
         <h2>
           Up next <span className="sub">tap to open</span>
@@ -155,7 +157,7 @@ export function TodayScreen({ p, today, minutes }: ScreenProps) {
             <Link to="/planner/habits">
               <b>Habits</b>
               <span className="muted">
-                {hdone}/{hs.length} habits · {p.water}/{WATER_MAX} glasses
+                {hdone}/{hs.length} habits · {litres(p.water)} of {litres(p.waterGoalMl)}
               </span>
             </Link>
           </li>
@@ -778,6 +780,161 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Water (Part C)                                                      */
+/* ------------------------------------------------------------------ */
+
+/** Add water and celebrate milestones. Never shames: going down is silent. */
+function useDrink(p: Planner, toast: (m: string) => void) {
+  return (deltaMl: number, what?: string) => {
+    const [before, after] = p.addWater(deltaMl);
+    celebrateWater(p, toast, before, after, what);
+  };
+}
+
+function celebrateWater(p: Planner, toast: (m: string) => void, before: number, after: number, what?: string) {
+  sfx.water(before, after, p.waterGoalMl);
+  const m = waterMilestone(before, after, p.waterGoalMl);
+  if (m === "full") {
+    sparkleFrom(document.querySelector(".fountain"));
+    toast(`Fountain full: ${litres(after)} ✨`);
+  } else if (m === "half") toast(`Halfway there: ${litres(after)} 💧`);
+  else if (what && after > before) toast(`${what}: ${litres(after)} today`);
+}
+
+function WaterSummary({ p, today, size = 96 }: { p: Planner; today: string; size?: number }) {
+  const days = daysAtGoalThisWeek(p.snap!.water, p.waterGoalMl, today);
+  return (
+    <div className="water-summary">
+      <Fountain pct={p.water / p.waterGoalMl} size={size} label={`Fountain ${Math.round((p.water / p.waterGoalMl) * 100)}% full`} />
+      <div className="ws-text">
+        <span className="ws-big">
+          {litres(p.water)} <span className="muted">of {litres(p.waterGoalMl)}</span>
+        </span>
+        <span className="muted">
+          This week's goal: {litres(p.waterGoalMl)} · {days} of 7 days so far
+        </span>
+        <span className="muted">Moonlit Garden fountain</span>
+      </div>
+    </div>
+  );
+}
+
+export function WaterCard({ p, today, toast }: { p: Planner; today: string; toast: (m: string) => void }) {
+  const drink = useDrink(p, toast);
+  return (
+    <div className="card">
+      <h2>Water</h2>
+      <WaterSummary p={p} today={today} />
+      <div className="row">
+        <Btn className="btn" onClick={() => drink(p.bottleMl, "Bottle")}>
+          Finished a bottle ({litres(p.bottleMl)})
+        </Btn>
+        <Btn className="btn ghost" onClick={() => drink(GLASS_ML, "Glass")}>
+          +250 ml glass
+        </Btn>
+      </div>
+      <div className="drinks" role="group" aria-label="Other drinks">
+        {DRINKS.map((d) => (
+          <Btn key={d.key} className="chip-btn" onClick={() => drink(d.ml, d.label)}>
+            {d.label} <span className="muted">+{d.ml} ml</span>
+          </Btn>
+        ))}
+      </div>
+      <div className="row" style={{ alignItems: "center" }}>
+        <Btn className="btn ghost" disabled={p.water <= 0} onClick={() => drink(-GLASS_ML)}>
+          −250 ml (fix a mistake)
+        </Btn>
+        <Link to="/planner/settings" className="muted" style={{ minHeight: 44, display: "inline-flex", alignItems: "center" }}>
+          Bottle size: {litres(p.bottleMl)} ›
+        </Link>
+      </div>
+      <div className="muted" style={{ marginTop: 6 }}>
+        Shared with Sanctuary. Other drinks count too.
+      </div>
+    </div>
+  );
+}
+
+/** Today: tiny water quests tied to things you already do. */
+export function AnchorsCard({ p, today, toast }: { p: Planner; today: string; toast: (m: string) => void }) {
+  const habits = p.habitsFor(today);
+  const done = ANCHORS.filter((a) => habits[a.key]).length;
+  return (
+    <div className="card">
+      <h2>
+        Water anchors <span className="sub">{done}/{ANCHORS.length}</span>
+      </h2>
+      <WaterSummary p={p} today={today} size={72} />
+      <ul className="anchors">
+        {ANCHORS.map((a) => {
+          const on = !!habits[a.key];
+          const bottle = p.fromBottle(a.key);
+          return (
+            <li key={a.key} className={on ? "done" : ""}>
+              <Orb
+                checked={on}
+                label={(on ? "Done: " : "Mark done: ") + a.label}
+                onChange={(v) => {
+                  if (v) playTick(p, today);
+                  const [before, after] = p.tickAnchor(a, v);
+                  celebrateWater(p, toast, before, after);
+                }}
+              />
+              <span className="a-text">
+                {a.label}
+                <span className="muted">{a.ml ? (bottle ? " · check-off (from my bottle)" : ` · +${anchorMl(a, false)} ml`) : " · check-off"}</span>
+              </span>
+              {a.ml > 0 && (
+                <Btn
+                  className={"toggle-chip" + (bottle ? " on" : "")}
+                  aria-pressed={bottle}
+                  disabled={on}
+                  title={on ? "Untick first to change this" : undefined}
+                  onClick={() => p.setFromBottle(a.key, !bottle)}
+                >
+                  from my bottle
+                </Btn>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function WaterSettings({ p, toast }: { p: Planner; toast: (m: string) => void }) {
+  return (
+    <div className="card">
+      <h2>Water</h2>
+      <div className="muted" style={{ marginBottom: 8 }}>
+        Your bottle size. "Finished a bottle" adds this much.
+      </div>
+      <div className="bottle-sizes" role="group" aria-label="Bottle size">
+        {BOTTLE_SIZES.map((ml) => (
+          <Btn
+            key={ml}
+            className={"chip-btn" + (p.bottleMl === ml ? " on" : "")}
+            aria-pressed={p.bottleMl === ml}
+            onClick={() => {
+              p.setSetting("bottle_ml", ml);
+              toast(`Bottle size: ${litres(ml)}`);
+            }}
+          >
+            {litres(ml)}
+          </Btn>
+        ))}
+      </div>
+      <div className="muted" style={{ marginTop: 8 }}>
+        Goal starts at 1.25 L a day and rises 0.25 L after any week with 5 good days, up to 2 L. This week: {litres(p.waterGoalMl)}.
+      </div>
+    </div>
+  );
+}
+
+const BOTTLE_SIZES = [500, 750, 1000, 1500, 2000];
+
+/* ------------------------------------------------------------------ */
 /* Habits                                                              */
 /* ------------------------------------------------------------------ */
 
@@ -788,34 +945,7 @@ export function HabitsScreen({ p, today, toast }: ScreenProps) {
   const list = habitsOn(today);
   return (
     <>
-      <div className="card">
-        <h2>
-          Water{" "}
-          <span className="sub">
-            {p.water}/{WATER_MAX} glasses (~{(p.water * 0.25).toFixed(2).replace(/\.?0+$/, "")} L)
-          </span>
-        </h2>
-        <div className="water" role="group" aria-label="Glasses of water">
-          {Array.from({ length: WATER_MAX }, (_, k) => k + 1).map((i) => (
-            <Btn
-              key={i}
-              className={i <= p.water ? "on" : ""}
-              aria-label={`${i} glass${i > 1 ? "es" : ""}`}
-              aria-pressed={i <= p.water}
-              onClick={() => {
-                const next = p.water === i ? i - 1 : i;
-                sfx.water(p.water, next);
-                if (next === 4 && p.water < 4) toast("Halfway there: 4 glasses 💧");
-                if (next === WATER_MAX && p.water < WATER_MAX) toast("All 8 glasses done ✨");
-                p.setWater(next);
-              }}
-            />
-          ))}
-        </div>
-        <div className="muted" style={{ marginTop: 6 }}>
-          Shared with Sanctuary.
-        </div>
-      </div>
+      <WaterCard p={p} today={today} toast={toast} />
       <h2 className="section">Habits</h2>
       <ul className="quests">
         {list.map((h) => {
@@ -941,9 +1071,10 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
         done: snap.done,
         habits: p.habitsFor(today),
         water: p.water,
+        waterGoalMl: p.waterGoalMl,
         notes,
       }),
-    [today, p.lists, snap, p.water, notes],
+    [today, p.lists, snap, p.water, p.waterGoalMl, notes],
   );
 
   const csv = () => {
@@ -1008,7 +1139,7 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
           );
         })}
         <div className="muted">
-          Habits {report.habitsDone.length}/{report.habitsDone.length + report.habitsMissed.length} · water {report.water}/{WATER_MAX}
+          Habits {report.habitsDone.length}/{report.habitsDone.length + report.habitsMissed.length} · water {waterText(report)}
           {report.habitsMissed.length ? ` · missed: ${report.habitsMissed.join("; ")}` : ""}
         </div>
         <label className="muted" htmlFor="review-notes" style={{ display: "block", marginTop: 12 }}>
@@ -1053,7 +1184,7 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
       <div className="card">
         <h2>Export for Python</h2>
         <p className="muted" style={{ marginTop: 0 }}>
-          One row per task, habit and water count per day: <code>date, category, item, done</code>.
+          One row per task, habit and water (ml) per day: <code>date, category, item, done</code>.
         </p>
         <div className="row">
           <button className="btn" onClick={() => download(`saisha-planner-${today}.csv`, csv(), "text/csv")}>
@@ -1409,6 +1540,7 @@ export function SettingsScreen({ p, today, toast }: ScreenProps) {
   return (
     <>
       <MyWorkouts p={p} today={today} toast={toast} />
+      <WaterSettings p={p} toast={toast} />
       <SoundCard />
     </>
   );

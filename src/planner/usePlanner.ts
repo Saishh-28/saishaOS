@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Block, GYM_HABIT, WATER_MAX } from "./plan";
+import { Block, GYM_HABIT } from "./plan";
+import { Anchor, anchorMl, clampDayMl, mondayOf, parseBottleMl, waterGoal } from "./water";
 import { ExerciseLog, GymSession, isSessionComplete } from "./gym";
 import { applyEdit, PlanItem, planKey } from "./workouts";
 import type { WorkoutDay } from "./plan";
@@ -27,6 +28,7 @@ function cloneSnap(s: Snapshot): Snapshot {
     water: new Map(s.water),
     exercises: new Map(s.exercises),
     workoutPlans: new Map(s.workoutPlans),
+    settings: { ...s.settings },
   };
 }
 
@@ -303,8 +305,9 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     );
   };
 
-  const setWater = (glasses: number) => {
-    const g = Math.max(0, Math.min(WATER_MAX, glasses));
+  /** Set today's water (ml). */
+  const setWater = (ml: number) => {
+    const g = clampDayMl(ml);
     return (
       store &&
       mutate(
@@ -317,6 +320,61 @@ export function usePlanner(store: PlannerStore | null, today: string) {
       )
     );
   };
+
+  /** Add (or with a negative number, remove) ml. Returns [before, after]. */
+  const addWater = (deltaMl: number): [number, number] => {
+    const before = snapRef.current?.water.get(today) ?? 0;
+    const after = clampDayMl(before + deltaMl);
+    setWater(after);
+    return [before, after];
+  };
+
+  const setSetting = (key: string, value: unknown) =>
+    store &&
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.settings[key] = value;
+        return n;
+      },
+      () => store.setSetting(key, value),
+    );
+
+  const settings = snap?.settings ?? {};
+  const fromBottleMap = (settings.water_from_bottle ?? {}) as Record<string, boolean>;
+  const fromBottle = (key: string) => fromBottleMap[key] === true;
+  const setFromBottle = (key: string, on: boolean) => setSetting("water_from_bottle", { ...fromBottleMap, [key]: on });
+
+  /** Tick an anchor quest: habit_logs tick, plus 250 ml unless it's "from my bottle" or a refill. Returns [before, after] ml. */
+  const tickAnchor = (anchor: Anchor, checked: boolean): [number, number] => {
+    const before = snapRef.current?.water.get(today) ?? 0;
+    if (!store || !snapRef.current) return [before, before];
+    const delta = anchorMl(anchor, fromBottle(anchor.key)) * (checked ? 1 : -1);
+    const after = clampDayMl(before + delta);
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.habits.set(today, { ...(n.habits.get(today) ?? {}), [anchor.key]: checked });
+        if (delta) n.water.set(today, after);
+        return n;
+      },
+      async () => {
+        await store.setHabit(today, anchor.key, checked);
+        if (delta) await store.setWater(today, after);
+      },
+    );
+    return [before, after];
+  };
+
+  // The gradual water goal starts the week you first use it.
+  const goalStart = typeof settings.water_goal_start === "string" ? (settings.water_goal_start as string) : null;
+  useEffect(() => {
+    if (store && snap && loadedOn === today && !goalStart && !creating.current.has("water_goal_start")) {
+      creating.current.add("water_goal_start");
+      setSetting("water_goal_start", mondayOf(today));
+    }
+  }, [store, snap, loadedOn, today, goalStart]);
+  const goal = waterGoal(snap?.water ?? new Map(), goalStart ?? mondayOf(today), today);
 
   const setNotes = (notes: string) =>
     store &&
@@ -353,6 +411,13 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     tasksById,
     habitsFor,
     water: snap?.water.get(today) ?? 0,
+    waterGoalMl: goal.goalMl,
+    bottleMl: parseBottleMl(settings.bottle_ml),
+    addWater,
+    tickAnchor,
+    fromBottle,
+    setFromBottle,
+    setSetting,
     toggleDone,
     removeTask,
     addCustom,

@@ -48,7 +48,8 @@ export interface WellnessEntry {
     nightDone: boolean;
   };
   moodScore: number; // 1-10
-  waterIntakeCups: number;
+  /** Water drunk that day, in ml (health_logs metric water_ml, shared with the planner). */
+  waterIntakeMl: number;
   journalPrompt: string;
   journalText: string;
 }

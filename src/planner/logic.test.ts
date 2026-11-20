@@ -245,9 +245,9 @@ describe("today view helpers", () => {
     expect(SCHEDULE[currentSlotIndex(23 * 60)].label).toBe("Sleep");
   });
 
-  it("progress counts tasks, habits and a full water bottle", () => {
+  it("progress counts tasks, habits and reaching the water goal", () => {
     const lists: DayLists = { deep: [{ taskId: "a", carriedOver: false }], study: [{ taskId: "b", carriedOver: false }] };
-    const p = dayProgress({ lists, done: done({ a: "2026-11-19" }), habits: { gym: true }, water: 8 });
+    const p = dayProgress({ lists, done: done({ a: "2026-11-19" }), habits: { gym: true }, water: 1250 }); // ml: reaching the starting goal (1.25 L)
     expect(p.total).toBe(2 + HABITS.length + 1);
     expect(p.done).toBe(3);
   });

@@ -183,3 +183,31 @@ export function Icon({ name, size = 22 }: { name: string; size?: number }) {
     </svg>
   );
 }
+
+/** Moonlit Garden fountain: the basin fills with the day's water. Full = glow. */
+export function Fountain({ pct, size = 96, label }: { pct: number; size?: number; label: string }) {
+  const p = Math.max(0, Math.min(1, pct));
+  const full = p >= 1;
+  const top = 70 - 46 * p; // water surface inside the basin (y from 24 to 70)
+  return (
+    <svg className={"fountain" + (full ? " full" : "")} width={size} height={size} viewBox="0 0 100 100" role="img" aria-label={label}>
+      <defs>
+        <linearGradient id="fw" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#c9fbff" />
+          <stop offset="100%" stopColor="#8ee6e0" />
+        </linearGradient>
+        <clipPath id="fbasin">
+          <path d="M22 24 H78 L72 70 Q50 78 28 70 Z" />
+        </clipPath>
+      </defs>
+      <ellipse cx="50" cy="88" rx="34" ry="6" fill="rgba(142,230,224,0.25)" />
+      <rect x="44" y="70" width="12" height="18" rx="3" fill="#5b4a8f" />
+      <path d="M22 24 H78 L72 70 Q50 78 28 70 Z" fill="rgba(10,6,40,0.55)" stroke="rgba(191,243,240,0.6)" strokeWidth="2" />
+      <g clipPath="url(#fbasin)">
+        <rect x="0" y={top} width="100" height="80" fill="url(#fw)" opacity="0.9" />
+        <path d={`M0 ${top} Q 25 ${top - 3} 50 ${top} T 100 ${top}`} fill="none" stroke="#fff" strokeOpacity="0.7" strokeWidth="1.5" />
+      </g>
+      {full && <circle cx="50" cy="14" r="5" fill="#fff6d6" className="f-spark" />}
+    </svg>
+  );
+}

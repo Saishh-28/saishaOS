@@ -16,7 +16,7 @@ import {
 import { currentSlotIndex, dayProgress, habitsOn, ticksOn, csvRows } from "./logic";
 import { HABITS, SCHEDULE } from "./plan";
 import { buildReport } from "./report";
-import { DEFAULT_SETTINGS, parseSettings, tickSound, waterMilestone } from "./sound";
+import { DEFAULT_SETTINGS, parseSettings, tickSound } from "./sound";
 
 const log = (weightKg: number | null, done = true): ExerciseLog => ({ done, weightKg, sets: 3, reps: null });
 
@@ -145,16 +145,7 @@ describe("India time", () => {
   });
 });
 
-describe("water milestones", () => {
-  it("chimes when reaching 4 and 8 glasses, not when going down or past them", () => {
-    expect(waterMilestone(3, 4)).toBe("half");
-    expect(waterMilestone(7, 8)).toBe("full");
-    expect(waterMilestone(2, 8)).toBe("full"); // tapping the 8th glass directly
-    expect(waterMilestone(4, 5)).toBeNull();
-    expect(waterMilestone(5, 4)).toBeNull();
-    expect(waterMilestone(8, 7)).toBeNull();
-  });
-});
+// Water milestones moved to water.test.ts (they're in ml against the weekly goal now).
 
 describe("schedule", () => {
   it("8:14 pm is still the 6:30 block; the 8:30 pm evening review comes next", () => {

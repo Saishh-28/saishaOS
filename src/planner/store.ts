@@ -5,11 +5,11 @@
  *   (local development), matching the rest of Saisha OS.
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { toUUID } from "../supabaseSync";
 import { Block, HABITS, WATER_METRIC } from "./plan";
 import { DayLists, ImportPlan, ListItem, PlanTask } from "./logic";
 import type { ExerciseLog } from "./gym";
 import { parsePlanItems, PlanItem, planKey, PlanScope } from "./workouts";
+import { glassesToMl } from "./water";
 import type { WorkoutDay } from "./plan";
 
 export interface DayRecord {
@@ -23,9 +23,10 @@ export interface Snapshot {
   done: Map<string, string>; // taskId -> done date
   days: Map<string, DayRecord>;
   habits: Map<string, Record<string, boolean>>; // date -> habit key / gym tick -> done
-  water: Map<string, number>; // date -> glasses
+  water: Map<string, number>; // date -> ml
   exercises: Map<string, Record<string, ExerciseLog>>; // date -> exercise_key -> log
   workoutPlans: Map<string, PlanItem[]>; // `${workout}|${scope}` -> your version of Day A / B
+  settings: Record<string, unknown>; // user_settings key -> value
 }
 
 export interface PlannerStore {
@@ -41,11 +42,14 @@ export interface PlannerStore {
   deleteTask(taskId: string): Promise<void>;
   /** Habits, skincare (routed to health_logs) and gym ticks (habit_logs). */
   setHabit(date: string, key: string, done: boolean): Promise<void>;
-  setWater(date: string, glasses: number): Promise<void>;
+  /** Water for a day, in ml. */
+  setWater(date: string, ml: number): Promise<void>;
   /** Gym exercises, cardio items and yoga poses (exercise_logs). */
   setExercise(date: string, key: string, log: ExerciseLog): Promise<void>;
   /** Save (or with null, delete) your version of a workout for a scope ("always" or a date). */
   setWorkoutPlan(workout: WorkoutDay, scope: PlanScope, items: PlanItem[] | null): Promise<void>;
+  /** Small per-user preferences (bottle size, water goal start, "from my bottle"). */
+  setSetting(key: string, value: unknown): Promise<void>;
   setNotes(date: string, notes: string | null): Promise<void>;
   importBackup(plan: ImportPlan): Promise<void>;
   /** Live sync: call `onChange` when another device changes this user's data. Returns unsubscribe. */
@@ -62,6 +66,7 @@ export const LIVE_TABLES = [
   "exercise_logs",
   "health_logs",
   "workout_plans",
+  "user_settings",
 ] as const;
 
 export const emptySnapshot = (): Snapshot => ({
@@ -72,6 +77,7 @@ export const emptySnapshot = (): Snapshot => ({
   water: new Map(),
   exercises: new Map(),
   workoutPlans: new Map(),
+  settings: {},
 });
 
 /** Habit keys stored in Sanctuary's health_logs instead of habit_logs. */
@@ -80,10 +86,14 @@ const HEALTH_METRIC_BY_KEY = new Map(
 );
 const KEY_BY_HEALTH_METRIC = new Map([...HEALTH_METRIC_BY_KEY].map(([k, m]) => [m, k]));
 
-/** Same row ID scheme Sanctuary uses (see syncWellnessHistory), so both share one row. */
+/**
+ * One health_logs row per (user, metric, day). Rows are matched on
+ * (user_id, metric, logged_at), the same key Sanctuary uses, so both share one
+ * row. The database picks the id (IDs used to be built from date + metric only).
+ */
+export const HEALTH_CONFLICT = "user_id,metric,logged_at";
 function healthRow(userId: string, date: string, metric: string, value: string, unit: string) {
   return {
-    id: toUUID("health-" + date + "-" + metric),
     user_id: userId,
     metric,
     value,
@@ -113,7 +123,7 @@ export class SupabaseStore implements PlannerStore {
 
   async load(): Promise<Snapshot> {
     const uid = this.userId;
-    const [tasks, days, items, done, habits, health, exercises, plans] = await Promise.all([
+    const [tasks, days, items, done, habits, health, exercises, plans, settings] = await Promise.all([
       this.sb.from("plan_tasks").select("*").eq("user_id", uid),
       this.sb.from("planner_days").select("*").eq("user_id", uid),
       this.sb.from("daily_list_items").select("*").eq("user_id", uid).order("position"),
@@ -126,6 +136,7 @@ export class SupabaseStore implements PlannerStore {
         .in("metric", [WATER_METRIC, ...HEALTH_METRIC_BY_KEY.values()]),
       this.sb.from("exercise_logs").select("*").eq("user_id", uid),
       this.sb.from("workout_plans").select("workout,scope,items").eq("user_id", uid),
+      this.sb.from("user_settings").select("key,value").eq("user_id", uid),
     ]);
     for (const [r, what] of [
       [tasks, "plan_tasks"],
@@ -141,6 +152,7 @@ export class SupabaseStore implements PlannerStore {
     if (exercises.error) console.warn("[planner] exercise_logs unavailable:", exercises.error.message);
     // Same for workout_plans (Part B migration): without it you get the default workouts.
     if (plans.error) console.warn("[planner] workout_plans unavailable:", plans.error.message);
+    if (settings.error) console.warn("[planner] user_settings unavailable:", settings.error.message);
 
     const snap = emptySnapshot();
     snap.tasks = (tasks.data ?? []).map((r: any) => ({
@@ -178,6 +190,7 @@ export class SupabaseStore implements PlannerStore {
       const list = parsePlanItems(r.items);
       if (list && (r.workout === "A" || r.workout === "B")) snap.workoutPlans.set(planKey(r.workout, r.scope), list);
     }
+    for (const r of settings.data ?? []) snap.settings[r.key] = r.value;
     return snap;
   }
 
@@ -269,14 +282,24 @@ export class SupabaseStore implements PlannerStore {
   async setHabit(date: string, key: string, done: boolean) {
     const metric = HEALTH_METRIC_BY_KEY.get(key);
     if (metric) {
-      check(await this.sb.from("health_logs").upsert(healthRow(this.userId, date, metric, String(done), "boolean")), "Saving habit");
+      check(
+        await this.sb.from("health_logs").upsert(healthRow(this.userId, date, metric, String(done), "boolean"), { onConflict: HEALTH_CONFLICT }),
+        "Saving habit",
+      );
     } else {
       check(await this.sb.from("habit_logs").upsert({ user_id: this.userId, date, habit_key: key, done }), "Saving habit");
     }
   }
 
-  async setWater(date: string, glasses: number) {
-    check(await this.sb.from("health_logs").upsert(healthRow(this.userId, date, WATER_METRIC, String(glasses), "cups")), "Saving water");
+  async setWater(date: string, ml: number) {
+    check(
+      await this.sb.from("health_logs").upsert(healthRow(this.userId, date, WATER_METRIC, String(ml), "ml"), { onConflict: HEALTH_CONFLICT }),
+      "Saving water",
+    );
+  }
+
+  async setSetting(key: string, value: unknown) {
+    check(await this.sb.from("user_settings").upsert({ user_id: this.userId, key, value }), "Saving setting");
   }
 
   async setExercise(date: string, key: string, log: ExerciseLog) {
@@ -360,10 +383,11 @@ export class SupabaseStore implements PlannerStore {
           if (metric) healthRows.push(healthRow(uid, d.date, metric, String(done), "boolean"));
           else habitRows.push({ user_id: uid, date: d.date, habit_key: key, done });
         }
-        healthRows.push(healthRow(uid, d.date, WATER_METRIC, String(d.water), "cups"));
+        healthRows.push(healthRow(uid, d.date, WATER_METRIC, String(glassesToMl(d.water)), "ml"));
       }
       if (habitRows.length) check(await this.sb.from("habit_logs").upsert(habitRows), "Importing habits");
-      if (healthRows.length) check(await this.sb.from("health_logs").upsert(healthRows), "Importing water and skincare");
+      if (healthRows.length)
+        check(await this.sb.from("health_logs").upsert(healthRows, { onConflict: HEALTH_CONFLICT }), "Importing water and skincare");
     }
     if (plan.completions.length)
       check(
@@ -392,6 +416,7 @@ type Serialized = {
   water: [string, number][];
   exercises?: [string, Record<string, ExerciseLog>][];
   workoutPlans?: [string, PlanItem[]][];
+  settings?: Record<string, unknown>;
 };
 
 export class LocalStore implements PlannerStore {
@@ -413,6 +438,7 @@ export class LocalStore implements PlannerStore {
           water: new Map(s.water),
           exercises: new Map(s.exercises ?? []),
           workoutPlans: new Map(s.workoutPlans ?? []),
+          settings: s.settings ?? {},
         };
       }
     } catch (e) {
@@ -430,6 +456,7 @@ export class LocalStore implements PlannerStore {
       water: [...this.snap.water],
       exercises: [...this.snap.exercises],
       workoutPlans: [...this.snap.workoutPlans],
+      settings: this.snap.settings,
     };
     this.storage.setItem(LOCAL_KEY, JSON.stringify(s));
   }
@@ -473,8 +500,12 @@ export class LocalStore implements PlannerStore {
     setIn(this.snap.habits, date, key, done);
     this.save();
   }
-  async setWater(date: string, glasses: number) {
-    this.snap.water.set(date, glasses);
+  async setWater(date: string, ml: number) {
+    this.snap.water.set(date, ml);
+    this.save();
+  }
+  async setSetting(key: string, value: unknown) {
+    this.snap.settings = { ...this.snap.settings, [key]: value };
     this.save();
   }
   async setExercise(date: string, key: string, log: ExerciseLog) {
@@ -496,7 +527,7 @@ export class LocalStore implements PlannerStore {
     for (const d of plan.days) {
       if (!this.snap.days.has(d.date)) this.snap.days.set(d.date, { lists: d.lists, fromAi: d.fromAi, notes: null });
       for (const [k, v] of Object.entries({ ...d.habits, ...d.gymTicks })) setIn(this.snap.habits, d.date, k, v);
-      this.snap.water.set(d.date, d.water);
+      this.snap.water.set(d.date, glassesToMl(d.water));
     }
     for (const c of plan.completions) if (!this.snap.done.has(c.taskId)) this.snap.done.set(c.taskId, c.doneDate);
     this.save();

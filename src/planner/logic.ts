@@ -327,12 +327,15 @@ export function greeting(hour: number): string {
   return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 }
 
-/** Overall progress: tasks + habits + (water at 8 glasses counts as one item). */
+/** Overall progress: tasks + habits + (reaching the water goal counts as one item). */
 export function dayProgress(args: {
   lists: DayLists;
   done: Completions;
   habits: Readonly<Record<string, boolean>>;
+  /** Water drunk today, in ml. */
   water: number;
+  /** This week's water goal in ml (see water.ts waterGoal); defaults to the starting goal, 1.25 L. */
+  waterGoalMl?: number;
   /** When given, only the habits that apply on that date count (see habitsOn). */
   date?: string;
 }): { done: number; total: number; pct: number } {
@@ -341,7 +344,7 @@ export function dayProgress(args: {
   const tdone = ids.filter((id) => args.done.has(id)).length;
   const hdone = habits.filter((h) => args.habits[h.key]).length;
   const total = ids.length + habits.length + 1;
-  const doneAll = tdone + hdone + (args.water >= WATER_MAX ? 1 : 0);
+  const doneAll = tdone + hdone + (args.water >= (args.waterGoalMl ?? 1250) ? 1 : 0);
   return { done: doneAll, total, pct: Math.round((doneAll / total) * 100) };
 }
 
@@ -373,7 +376,7 @@ export function csvRows(days: readonly CsvDay[], tasksById: ReadonlyMap<string, 
         }
       }
       for (const h of habitsOn(d.date)) rows.push([d.date, "habit", h.label, d.habits[h.key] ? 1 : 0]);
-      rows.push([d.date, "water", "glasses", d.water || 0]);
+      rows.push([d.date, "water", "ml", d.water || 0]);
     });
   return rows;
 }
