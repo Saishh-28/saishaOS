@@ -30,7 +30,7 @@ export default function SanctuaryPanel({ wellnessHistory, onAddWellnessEntry }: 
   const [skinNight, setSkinNight] = useState(false);
 
   const [moodScore, setMoodScore] = useState(7);
-  const [waterCups, setWaterCups] = useState(0);
+  const [waterMl, setWaterMl] = useState(0);
   const [journalText, setJournalText] = useState("");
 
   // Local calendar date (not UTC), so early mornings in India don't count as yesterday.
@@ -51,7 +51,7 @@ export default function SanctuaryPanel({ wellnessHistory, onAddWellnessEntry }: 
     setSkinMorning(todayEntry.skinRoutine.morningDone);
     setSkinNight(todayEntry.skinRoutine.nightDone);
     setMoodScore(todayEntry.moodScore);
-    setWaterCups(todayEntry.waterIntakeCups);
+    setWaterMl(todayEntry.waterIntakeMl ?? 0);
     setJournalText(todayEntry.journalText || "");
   }, [todayEntry]);
 
@@ -69,7 +69,7 @@ export default function SanctuaryPanel({ wellnessHistory, onAddWellnessEntry }: 
         nightDone: skinNight
       },
       moodScore,
-      waterIntakeCups: waterCups,
+      waterIntakeMl: waterMl,
       journalPrompt: "How did you embrace stillness on your path today?",
       journalText
     };
@@ -219,22 +219,24 @@ export default function SanctuaryPanel({ wellnessHistory, onAddWellnessEntry }: 
                   <span className="text-sm font-semibold text-pink-200 flex items-center gap-1.5">
                     <Droplet className="w-4 h-4 text-sky-400" /> Hydration Level
                   </span>
-                  <span className="text-xs font-mono text-sky-300">{waterCups} / 8 Cups</span>
+                  <span className="text-xs font-mono text-sky-300">{(Math.round(waterMl / 10) / 100).toString()} L</span>
                 </div>
-                <div className="flex justify-around items-center gap-1.5 py-1">
-                  {[...Array(8)].map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setWaterCups(i + 1)}
-                      className={`w-7 h-9 rounded-md flex items-end justify-center pb-1 transition-all ${
-                        i < waterCups 
-                          ? "bg-sky-400/30 border border-sky-400/40 text-sky-200 scale-105" 
-                          : "bg-white/5 border border-white/5 text-gray-600 hover:border-white/10"
-                      }`}
-                    >
-                      <Droplet className="w-3.5 h-3.5" />
-                    </button>
-                  ))}
+                {/* Same value as the planner's water (health_logs water_ml). */}
+                <div className="flex justify-around items-center gap-2 py-1">
+                  <button
+                    onClick={() => setWaterMl(Math.max(0, waterMl - 250))}
+                    className="min-h-11 px-3 rounded-md bg-white/5 border border-white/10 text-sky-200 text-sm"
+                    aria-label="Remove 250 ml"
+                  >
+                    −250 ml
+                  </button>
+                  <button
+                    onClick={() => setWaterMl(Math.min(6000, waterMl + 250))}
+                    className="min-h-11 px-3 rounded-md bg-sky-400/30 border border-sky-400/40 text-sky-100 text-sm flex items-center gap-1"
+                    aria-label="Add a 250 ml glass"
+                  >
+                    <Droplet className="w-3.5 h-3.5" /> +250 ml
+                  </button>
                 </div>
               </div>
 

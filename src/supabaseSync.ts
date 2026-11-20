@@ -371,16 +371,15 @@ export async function uploadInitialState(userId: string, state: SaishaOSState, b
         skin_morning_done: entry.skinRoutine?.morningDone ? "true" : "false",
         skin_night_done: entry.skinRoutine?.nightDone ? "true" : "false",
         mood_score: (entry.moodScore || 7).toString(),
-        water_cups: (entry.waterIntakeCups || 0).toString()
+        water_ml: (entry.waterIntakeMl || 0).toString()
       };
 
       Object.entries(metrics).forEach(([metricName, value]) => {
         dbLogs.push({
-          id: toUUID("health-" + entryDate + "-" + metricName),
           user_id: userId,
           metric: metricName,
           value: value,
-          unit: metricName.endsWith("_done") || metricName.startsWith("hair_") ? "boolean" : metricName === "mood_score" ? "score" : "cups",
+          unit: metricName.endsWith("_done") || metricName.startsWith("hair_") ? "boolean" : metricName === "mood_score" ? "score" : "ml",
           source: "manual",
           logged_at: `${entryDate}T12:00:00Z`,
           updated_at: new Date().toISOString()
@@ -391,7 +390,8 @@ export async function uploadInitialState(userId: string, state: SaishaOSState, b
       await supabase.from("journal_entries").upsert(dbJournals);
     }
     if (dbLogs.length > 0) {
-      await supabase.from("health_logs").upsert(dbLogs);
+      // One row per (user, metric, day); the database picks the id.
+    await supabase.from("health_logs").upsert(dbLogs, { onConflict: "user_id,metric,logged_at" });
     }
 
     // 6. Songs & Lyrics
@@ -503,7 +503,7 @@ export async function fetchFullState(userId: string): Promise<{ state: SaishaOSS
       moodScore: j.mood_score || 7,
       hairRecovery: { oiled: false, dermarolled: false, serumApplied: false, massageDone: false },
       skinRoutine: { morningDone: false, nightDone: false },
-      waterIntakeCups: 0
+      waterIntakeMl: 0
     };
   });
 
@@ -520,7 +520,7 @@ export async function fetchFullState(userId: string): Promise<{ state: SaishaOSS
         moodScore: 7,
         hairRecovery: { oiled: false, dermarolled: false, serumApplied: false, massageDone: false },
         skinRoutine: { morningDone: false, nightDone: false },
-        waterIntakeCups: 0
+        waterIntakeMl: 0
       };
     }
 
@@ -535,7 +535,7 @@ export async function fetchFullState(userId: string): Promise<{ state: SaishaOSS
     else if (log.metric === "skin_morning_done" && entry.skinRoutine) entry.skinRoutine.morningDone = valBool;
     else if (log.metric === "skin_night_done" && entry.skinRoutine) entry.skinRoutine.nightDone = valBool;
     else if (log.metric === "mood_score") entry.moodScore = isNaN(valNum) ? 7 : valNum;
-    else if (log.metric === "water_cups") entry.waterIntakeCups = isNaN(valNum) ? 0 : valNum;
+    else if (log.metric === "water_ml") entry.waterIntakeMl = isNaN(valNum) ? 0 : valNum;
   });
 
   const wellnessHistory = Object.values(entriesMap) as WellnessEntry[];
@@ -843,16 +843,15 @@ export async function syncWellnessHistory(userId: string, history: WellnessEntry
       skin_morning_done: entry.skinRoutine.morningDone ? "true" : "false",
       skin_night_done: entry.skinRoutine.nightDone ? "true" : "false",
       mood_score: entry.moodScore.toString(),
-      water_cups: entry.waterIntakeCups.toString()
+      water_ml: (entry.waterIntakeMl || 0).toString()
     };
 
     Object.entries(metrics).forEach(([metricName, value]) => {
       dbLogs.push({
-        id: toUUID("health-" + entryDate + "-" + metricName),
         user_id: userId,
         metric: metricName,
         value: value,
-        unit: metricName.endsWith("_done") || metricName.startsWith("hair_") ? "boolean" : metricName === "mood_score" ? "score" : "cups",
+        unit: metricName.endsWith("_done") || metricName.startsWith("hair_") ? "boolean" : metricName === "mood_score" ? "score" : "ml",
         source: "manual",
         logged_at: `${entryDate}T12:00:00Z`,
         updated_at: new Date().toISOString()
@@ -864,7 +863,8 @@ export async function syncWellnessHistory(userId: string, history: WellnessEntry
     await supabase.from("journal_entries").upsert(dbJournals);
   }
   if (dbLogs.length > 0) {
-    await supabase.from("health_logs").upsert(dbLogs);
+    // One row per (user, metric, day); the database picks the id.
+    await supabase.from("health_logs").upsert(dbLogs, { onConflict: "user_id,metric,logged_at" });
   }
 }
 
