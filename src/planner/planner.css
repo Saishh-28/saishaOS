@@ -1586,3 +1586,18 @@ body:has(.planner) {
     display: none;
   }
 }
+
+/* Rest / sick day */
+.planner .rest-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.planner .rest-row .btn {
+  min-height: var(--tap);
+}
+.planner .rest-note {
+  margin-top: 8px;
+}
