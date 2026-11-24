@@ -1731,3 +1731,17 @@ body:has(.planner) {
   background: radial-gradient(circle at 35% 30%, #fff6d6, #ffd98a 60%, #f2b98f);
   box-shadow: 0 0 18px rgba(255, 217, 138, 0.6);
 }
+
+/* Phase 2c: training levels */
+.planner .q-meta.suggest {
+  color: #ffe7b3;
+  font-weight: 800;
+}
+.planner .note.comeback {
+  margin-bottom: 14px;
+  border-color: rgba(142, 230, 224, 0.5);
+}
+.planner .gym-hero .small {
+  display: block;
+  margin-top: 6px;
+}
