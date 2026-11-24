@@ -10,7 +10,9 @@ import {
   formatTime,
   habitsOn,
   phaseFor,
+  studyTrackFor,
   ticksOn,
+  usesStudyTracks,
   toCsv,
 } from "./logic";
 import {
@@ -49,6 +51,7 @@ import {
 } from "./workouts";
 import type { WorkoutDay } from "./plan";
 import { buildReport, reportToText, waterText } from "./report";
+import { TRACK_LABEL } from "./study";
 import type { NewAiTask, RejectedItem, ValidatedPlan } from "./validate";
 import { supabase } from "../supabase";
 import { Link, pathForView } from "./router";
@@ -74,7 +77,7 @@ const BLOCK_META: Record<Block, { title: string; pill: string; note: string; isl
   study: {
     title: "Course prep & career",
     pill: "2:00–3:30",
-    note: "Proofs: write every proof by hand. R: type the code yourself, don't copy-paste.",
+    note: "One task per session. Mon/Wed/Fri R · Tue/Thu JavaScript → TypeScript → React · Sat review or German · Sun rest. Type the code yourself, don't copy-paste.",
     island: "Library of Stars",
   },
 };
@@ -221,7 +224,12 @@ export function BlockScreen({ p, today, toast, block }: ScreenProps & { block: B
           {meta.title} <span className="pill">{meta.pill}</span>
         </h2>
         <div className="muted">
-          Phase: {phaseFor(today).name} · {doneCount} of {items.length} done
+          {block === "study" && usesStudyTracks(today)
+            ? studyTrackFor(today)
+              ? `Today: ${TRACK_LABEL[studyTrackFor(today)!]}`
+              : "Sunday: rest. No course prep today."
+            : `Phase: ${phaseFor(today).name}`}{" "}
+          · {doneCount} of {items.length} done
         </div>
         <Progress pct={items.length ? Math.round((doneCount / items.length) * 100) : 0} label={`${meta.title} progress`} />
       </div>
