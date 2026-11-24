@@ -44,11 +44,21 @@ export function pathForView(v: PlannerView): string {
   return v === "today" ? "/planner" : `/planner/${v}`;
 }
 
+/** Screens on the bottom bar; every other screen gets a Back button. */
+export const TAB_VIEWS: PlannerView[] = ["today", "deep", "study", "gym", "habits"];
+
 export function navigate(path: string) {
   if (path === window.location.pathname) return;
-  window.history.pushState({}, "", path);
+  // Marked as an in-app step, so Back can return to it instead of leaving the app.
+  window.history.pushState({ inApp: true }, "", path);
   window.dispatchEvent(new Event(NAV_EVENT));
   window.scrollTo(0, 0);
+}
+
+/** Back: to the previous screen in the app, or Home when the screen was opened directly (a deep link). */
+export function goBack() {
+  if ((window.history.state as { inApp?: boolean } | null)?.inApp) window.history.back();
+  else navigate("/planner");
 }
 
 export function usePathname(): string {

@@ -7,7 +7,8 @@ import { currentSlotIndex, formatTime, greeting, isYmd } from "./logic";
 import { clockIn, longDate } from "./gym";
 import { sfx } from "./sound";
 import { Icon, Lumi, Stars } from "./ui";
-import { Link, PlannerView, pathForView, usePathname, viewFromPath } from "./router";
+import { goBack, Link, PlannerView, pathForView, TAB_VIEWS, usePathname, viewFromPath } from "./router";
+import { Castles } from "./castles";
 import { LocalStore, PlannerStore, SupabaseStore } from "./store";
 import { usePlanner } from "./usePlanner";
 import { BlockScreen, GymScreen, HabitsScreen, ReviewScreen, ScreenProps, SettingsScreen, TodayScreen } from "./screens";
@@ -20,7 +21,6 @@ import {
   CurrencyCard,
   CurrencyReminder,
   LumiScreen,
-  MoreScreen,
   MusicScreen,
   SignOutCard,
   TreasuryScreen,
@@ -40,11 +40,7 @@ const NAV: { v: PlannerView; label: string }[] = [
   { v: "study", label: "Study" },
   { v: "gym", label: "Gym" },
   { v: "habits", label: "Habits" },
-  { v: "more", label: "More" },
 ];
-
-/** Screens reached from the More tab (it stays highlighted on them). */
-const UNDER_MORE: PlannerView[] = ["more", "review", "settings", "care", "lumi", "music", "treasury", "rewards", "calendar", "meals"];
 
 const TITLES: Record<PlannerView, string> = {
   today: "Home",
@@ -294,6 +290,11 @@ export default function PlannerApp() {
         </div>
       </header>
       <main className="p-main">
+        {!TAB_VIEWS.includes(view) && (
+          <button className="back-btn" onClick={goBack} aria-label="Back">
+            <span aria-hidden="true">‹</span> Back
+          </button>
+        )}
         {p.error && (
           <div className="note error" role="alert" style={{ marginBottom: 14 }}>
             {p.error}{" "}
@@ -332,7 +333,7 @@ export default function PlannerApp() {
             <SignOutCard />
           </>
         ) : view === "more" ? (
-          <MoreScreen />
+          <Castles />
         ) : view === "care" ? (
           p.snap?.careReady ? <CareScreen2 {...more} /> : <CareScreen {...more} />
         ) : view === "lumi" ? (
@@ -363,7 +364,8 @@ export default function PlannerApp() {
           <Link
             key={n.v}
             to={pathForView(n.v)}
-            className={n.v === view || (n.v === "more" && UNDER_MORE.includes(view)) ? "active" : ""}
+            // Castle screens (reached from Home) keep Home highlighted.
+            className={n.v === view || (n.v === "today" && !TAB_VIEWS.includes(view)) ? "active" : ""}
             aria-current={n.v === view ? "page" : undefined}
           >
             <span className="ic">
