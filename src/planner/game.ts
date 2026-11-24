@@ -15,6 +15,7 @@ import { Block, GYM_HABIT, HABITS } from "./plan";
 import { ExerciseLogs, sessionFor } from "./gym";
 import { Boss, GermanLesson, questXp } from "./quests";
 import { MealLog, mealXp } from "./meals";
+import { CareData, careXp } from "./care";
 
 export type Skill = "body" | "mind" | "business" | "glow" | "family";
 
@@ -80,7 +81,7 @@ export interface XpEvent extends Earned {
   eventKey: string;
 }
 
-export interface GameData {
+export interface GameData extends CareData {
   tasks: readonly PlanTask[];
   done: Completions;
   days: ReadonlyMap<string, { lists: DayLists; fromAi: boolean }>;
@@ -153,6 +154,7 @@ export function earnedXp(d: GameData, today: string, waterGoalOn: (date: string)
   // Daily / weekly quests, Nicos Weg lessons, beaten bosses.
   out.push(...questXp(d, today, (date) => inRange(date, today)));
   out.push(...mealXp(d.meals ?? [], (date) => inRange(date, today)));
+  out.push(...careXp(d, (date) => inRange(date, today)));
   return out;
 }
 
