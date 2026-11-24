@@ -15,6 +15,7 @@ import {
   weeklyQuest,
   WeeklyQuest,
 } from "./quests";
+import { isComebackWeek, parseStoredLevels, StoredLevels, trackLevel, TrackLevel, withStored } from "./training";
 import { dayResult, earnedXp, levelInfo, LevelInfo, reconcileXp, Skill, SKILL_KEYS, streakInfo, StreakInfo, ticksToCount, xpTotals } from "./game";
 import { Block, GYM_HABIT } from "./plan";
 import { Anchor, anchorMl, clampDayMl, mondayOf, parseBottleMl, waterGoal } from "./water";
@@ -426,10 +427,44 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     (date: string) => waterGoal(snap?.water ?? new Map(), goalStart ?? mondayOf(date), date).goalMl,
     [snap, goalStart],
   );
+  /* ------------------------- training levels ------------------------- */
+  const training = useMemo((): Training | null => {
+    if (!snap) return null;
+    const stored = parseStoredLevels(snap.settings.training_levels);
+    const strength = trackLevel(snap.habits, "strength", today);
+    const yoga = trackLevel(snap.habits, "yoga", today);
+    return {
+      strength: withStored(strength, stored.strength),
+      yoga: withStored(yoga, stored.yoga),
+      computed: { strength: strength.level, yoga: yoga.level },
+      stored,
+      comeback: isComebackWeek(snap.habits, today),
+    };
+  }, [snap, today]);
+  const strengthL2On = training?.strength.history.find((s) => s.level >= 2)?.since ?? null;
+
+  // Never level down: remember the highest level reached on any phone.
+  useEffect(() => {
+    if (!store || !snap || !training || loadedOn !== today) return;
+    const next: StoredLevels = { ...training.stored };
+    let changed = false;
+    for (const k of ["strength", "yoga"] as const) {
+      if (training.computed[k] > (training.stored[k]?.level ?? 1)) {
+        next[k] = { level: training[k].level, since: training[k].since };
+        changed = true;
+      }
+    }
+    if (changed && !creating.current.has("training:" + JSON.stringify(next))) {
+      creating.current.add("training:" + JSON.stringify(next));
+      setSetting("training_levels", next);
+    }
+  }, [store, snap, training, loadedOn, today]);
+
   // XP rows still to write so the stored history matches what you've done.
   const xpMissing = useMemo(
-    () => (snap && snap.xpReady && loadedOn === today ? reconcileXp(earnedXp(snap, today, waterGoalOn), snap.xp) : []),
-    [snap, loadedOn, today, waterGoalOn],
+    () =>
+      snap && snap.xpReady && loadedOn === today ? reconcileXp(earnedXp({ ...snap, strengthL2On }, today, waterGoalOn), snap.xp) : [],
+    [snap, loadedOn, today, waterGoalOn, strengthL2On],
   );
   // If saving XP fails once, stop retrying until the app is reopened (no loop of failing writes).
   const xpBroken = useRef(false);
@@ -504,7 +539,7 @@ export function usePlanner(store: PlannerStore | null, today: string) {
             lessons: [...snap.german].sort((a, b) => a.lesson - b.lesson),
             bosses: [...snap.bosses]
               .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title))
-              .map((b) => ({ ...b, ...bossState(b, snap.german) })),
+              .map((b) => ({ ...b, ...bossState(b, snap.german, strengthL2On) })),
             rewards: [...snap.rewards].sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title)),
             claims: snap.claims,
             coins: coins(totals.total, snap.claims),
@@ -512,7 +547,7 @@ export function usePlanner(store: PlannerStore | null, today: string) {
           }
         : null,
     };
-  }, [snap, today, waterGoalOn, xpMissing]);
+  }, [snap, today, waterGoalOn, xpMissing, strengthL2On]);
 
   /* ---------------------- quests and rewards ---------------------- */
 
@@ -649,6 +684,7 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     setNotes,
     importBackup,
     game,
+    training,
     setGermanLesson,
     saveBoss,
     deleteBoss,
@@ -656,6 +692,16 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     deleteReward,
     claimReward,
   };
+}
+
+export interface Training {
+  strength: TrackLevel;
+  yoga: TrackLevel;
+  /** Levels worked out from your ticks alone (before the stored "never down" level). */
+  computed: { strength: number; yoga: number };
+  stored: StoredLevels;
+  /** This week is a Comeback week (strength < 50% over the last 2 weeks). */
+  comeback: boolean;
 }
 
 export interface Quests {

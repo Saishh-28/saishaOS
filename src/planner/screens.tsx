@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Block, SCHEDULE } from "./plan";
 import { Kingdom } from "./kingdom";
+import { Habits, isComebackWeek, levelOn, MAX_TRAINING_LEVEL, sessionAtLevel, sessionsBetween, suggestWeight, Track, TrackLevel } from "./training";
 import { ANCHORS, anchorMl, daysAtGoalThisWeek, DRINKS, GLASS_ML, litres, waterMilestone } from "./water";
 import {
   addDays,
@@ -407,6 +408,44 @@ function WeekStrip({ p, today, selected, onSelect }: { p: Planner; today: string
   );
 }
 
+/** Reps done on every set (from Strength Level 2, for double progression). */
+function RepsInput({ item, value, onSave }: { item: GymItem; value: number | null; onSave: (reps: number | null) => void }) {
+  const [text, setText] = useState(value == null ? "" : String(value));
+  useEffect(() => setText(value == null ? "" : String(value)), [value]);
+  return (
+    <label className="kg">
+      <input
+        type="text"
+        inputMode="numeric"
+        aria-label={`Reps on every set for ${item.name}`}
+        placeholder="–"
+        value={text}
+        onChange={(e) => setText(e.target.value.replace(/[^0-9]/g, "").slice(0, 3))}
+        onBlur={() => {
+          const n = text === "" ? null : Number(text);
+          if (n !== null && (n < 1 || n > 100)) return setText(value == null ? "" : String(value));
+          if (n !== value) onSave(n);
+        }}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+      />
+      reps
+    </label>
+  );
+}
+
+const fmtShort = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
+/** "Strength Level 1 · 3 of 12 sessions so far · Level 2 needs 10 of 12 · next check Mon 21 Dec". */
+function trainingLine(name: string, track: Track, t: TrackLevel, today: string, habits: Habits): string {
+  if (t.level >= MAX_TRAINING_LEVEL) return `${name} Level ${t.level} (the top level)`;
+  // You also need 4 weeks at this level: the first Monday that's allowed.
+  let check = t.window.checkOn;
+  const earliest = addDays(t.since, 28);
+  while (check < earliest) check = addDays(check, 7);
+  const done = sessionsBetween(habits, addDays(check, -28), today, track);
+  return `${name} Level ${t.level} · ${done} of ${t.window.of} sessions so far · Level ${t.level + 1} needs ${t.window.need} of ${t.window.of} in the 4 weeks before ${fmtShort(check)}`;
+}
+
 function KgInput({ item, value, onSave }: { item: GymItem; value: number | null; onSave: (kg: number | null) => boolean }) {
   const [text, setText] = useState(value == null ? "" : String(value));
   useEffect(() => setText(value == null ? "" : String(value)), [value]);
@@ -676,7 +715,10 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
   useEffect(() => setDay(today), [today]);
   const isToday = day === today;
   const future = day > today;
-  const session = sessionWithPlans(day, p.workoutPlans);
+  const tr = p.training;
+  const levels = { strength: tr ? levelOn(tr.strength, day) : 1, yoga: tr ? levelOn(tr.yoga, day) : 1 };
+  const session = sessionAtLevel(sessionWithPlans(day, p.workoutPlans), levels);
+  const comeback = session.kind === "strength" && isComebackWeek(p.snap!.habits, day);
   const logs = p.exercisesFor(day);
   const all = p.snap!.exercises;
   const [active, setActive] = useState<string | null>(null);
@@ -721,8 +763,17 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
               <Progress pct={Math.round((doneCount / session.items.length) * 100)} label="Session progress" />
             </>
           )}
+          {tr && (session.kind === "strength" || session.kind === "yoga") && (
+            <span className="muted small">{trainingLine(session.kind === "strength" ? "Strength" : "Yoga", session.kind, tr[session.kind], today, p.snap!.habits)}</span>
+          )}
         </div>
       </div>
+      {comeback && !future && (
+        <div className="note comeback" role="status">
+          <b>Comeback week.</b> Welcome back! The last two weeks were light, so use about 80% of your last weights this week and
+          focus on form. Your levels stay where they are.
+        </div>
+      )}
       <WeekStrip p={p} today={today} selected={day} onSelect={setDay} />
       {!isToday && (
         <div className="note day-note">
@@ -754,6 +805,7 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
             const last = item.weighted ? lastWeight(all, item.key, day) : null;
             const best = item.weighted ? bestWeightBefore(all, item.key, day) : null;
             const pb = log?.weightKg != null && best != null && log.weightKg > best;
+            const suggestion = session.kind === "strength" ? suggestWeight(all, item, day, { level: levels.strength, comeback }) : null;
             return (
               <li key={item.key} className={"quest" + (done ? " done" : "")}>
                 <Orb
@@ -769,6 +821,7 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
                     {item.plan}
                     {item.weighted && ` · Last: ${last ? formatKg(last.weightKg) : "–"}`}
                   </span>
+                  {suggestion && !done && <span className="q-meta suggest">{suggestion.text}</span>}
                   {swappedFrom && <span className="q-meta swapped">instead of {swappedFrom}</span>}
                   {session.kind === "strength" && (
                     <button className="link-btn" onClick={() => setSwapping(index)} aria-label={`Swap ${item.name}`}>
@@ -790,6 +843,13 @@ export function GymScreen({ p, today, toast }: ScreenProps) {
                         p.setExercise(session, item.key, { weightKg: kg, sets: item.sets ?? null, plannedKey: plannedOf(item.key) }, day);
                       return true;
                     }}
+                  />
+                )}
+                {item.weighted && !future && levels.strength >= 2 && (
+                  <RepsInput
+                    item={item}
+                    value={log?.reps ?? null}
+                    onSave={(reps) => p.setExercise(session, item.key, { reps, sets: item.sets ?? null, plannedKey: plannedOf(item.key) }, day)}
                   />
                 )}
                 {item.timer && active !== item.key && (

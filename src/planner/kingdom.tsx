@@ -161,7 +161,19 @@ function Chest() {
   );
 }
 
-export function LevelUpOverlay({ level, title, xp, onClose }: { level: number; title: string; xp: number; onClose: () => void }) {
+export function LevelUpOverlay({
+  crest,
+  name,
+  text,
+  eyebrow = "THE KINGDOM GROWS BRIGHTER",
+  onClose,
+}: {
+  crest: number;
+  name: string;
+  text: string;
+  eyebrow?: string;
+  onClose: () => void;
+}) {
   const motion = !reducedMotion();
   const particles = useMemo(
     () =>
@@ -190,15 +202,13 @@ export function LevelUpOverlay({ level, title, xp, onClose }: { level: number; t
           <span key={i} className="particle" aria-hidden="true" style={{ left: p.left, animationDelay: p.delay, width: p.size, height: p.size }} />
         ))}
       <div className="levelup-body">
-        <div className="eyebrow">THE KINGDOM GROWS BRIGHTER</div>
+        <div className="eyebrow">{eyebrow}</div>
         <h2 id="levelup-title">Level up!</h2>
         <div className="crest" aria-hidden="true">
-          <span>{level}</span>
+          <span>{crest}</span>
         </div>
-        <div className="levelup-name">
-          Level {level} · {title}
-        </div>
-        <p className="muted">{xp} XP earned since 19 November. Every tick counted.</p>
+        <div className="levelup-name">{name}</div>
+        <p className="muted">{text}</p>
         <div className="lumi-row" style={{ justifyContent: "center" }}>
           <div className="lumi-float">
             <Lumi size={64} mood="happy" />

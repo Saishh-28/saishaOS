@@ -520,7 +520,7 @@ export function RewardsScreen({ p, today, toast, userId }: Props & { userId: str
   if (!q || !p.game) return <Missing />;
   const ctx = {
     goodWeeks: q.goodWeeks,
-    strengthLevel: 1, // Phase 2c
+    strengthLevel: p.training?.strength.level ?? 1,
     firstCustomer: q.bosses.some((b) => b.id === "boss-first-customer" && !!b.beatenOn),
     today,
   };

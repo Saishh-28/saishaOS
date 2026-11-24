@@ -27,6 +27,7 @@ import {
 } from "./more";
 import { BUCKET_IMPORTED_FLAG, bucketItemsToImport, OLD_BUCKET_KEY, parseCurrency, showCurrencyReminder } from "./records";
 import { LevelUpOverlay } from "./kingdom";
+import type { TrackLevel } from "./training";
 import { QuestsScreen, RewardsScreen } from "./questScreens";
 import "./planner.css";
 
@@ -69,6 +70,19 @@ function devDate(): string | null {
 /** Re-render every 30 s so the "now" marker moves and a new day starts at midnight. */
 function currentTime(): Date {
   return new Date();
+}
+
+/** What a new strength / yoga level changes (shown in the celebration). */
+function trainingUnlockText(track: "strength" | "yoga", t: TrackLevel): string {
+  const step = t.history.find((s) => s.level === t.level);
+  const how = step?.sessions != null ? `${step.sessions} of ${track === "strength" ? 12 : 4} sessions in 4 weeks. ` : "";
+  const unlocks: Record<string, string> = {
+    "strength-2": "Weight suggestions are now on, plus a reps box for double progression.",
+    "strength-3": "Squats, deadlifts, hip thrusts, chest press and lat pulldown go to 4 sets.",
+    "yoga-2": "Every hold is 15 s longer, and Sun salutation goes to × 4.",
+    "yoga-3": "Warrior I and Pigeon join the flow, and Sun salutation goes to × 5.",
+  };
+  return how + (unlocks[`${track}-${t.level}`] ?? "");
 }
 
 function partOfDay(hour: number): string {
@@ -236,6 +250,12 @@ export default function PlannerApp() {
   // Celebrate a new player level once (on any phone): remembered in user_settings.
   const seenLevel = typeof p.settings.game_seen_level === "number" ? (p.settings.game_seen_level as number) : 1;
   const levelUp = loaded && p.game?.settled && p.game.level.level > seenLevel ? p.game.level : null;
+  // Strength / yoga level-ups (checked on Mondays), once each on any phone.
+  const seenTraining = (p.settings.training_seen ?? {}) as Partial<Record<"strength" | "yoga", number>>;
+  const trainingUp =
+    !levelUp && loaded && p.training
+      ? (["strength", "yoga"] as const).find((k) => p.training![k].level > (seenTraining[k] ?? 1)) ?? null
+      : null;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -346,10 +366,19 @@ export default function PlannerApp() {
       </nav>
       {levelUp && (
         <LevelUpOverlay
-          level={levelUp.level}
-          title={levelUp.title}
-          xp={levelUp.xp}
+          crest={levelUp.level}
+          name={`Level ${levelUp.level} · ${levelUp.title}`}
+          text={`${levelUp.xp} XP earned since 19 November. Every tick counted.`}
           onClose={() => p.setSetting("game_seen_level", levelUp.level)}
+        />
+      )}
+      {trainingUp && p.training && (
+        <LevelUpOverlay
+          crest={p.training[trainingUp].level}
+          eyebrow={trainingUp === "strength" ? "THE CRYSTAL MOUNTAINS AWAKEN" : "THE MOONLIT GARDEN STRETCHES"}
+          name={`${trainingUp === "strength" ? "Strength" : "Yoga"} · Level ${p.training[trainingUp].level}`}
+          text={trainingUnlockText(trainingUp, p.training[trainingUp])}
+          onClose={() => p.setSetting("training_seen", { ...seenTraining, [trainingUp]: p.training![trainingUp].level })}
         />
       )}
       <div className={"toast" + (toastOn ? " on" : "")} role="status" aria-live="polite">

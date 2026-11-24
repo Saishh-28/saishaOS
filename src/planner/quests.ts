@@ -189,16 +189,15 @@ export const SEED_BOSSES: Boss[] = [
 ];
 
 /** A boss's progress and the day it was beaten (auto bosses from your data). */
-export function bossState(b: Boss, lessons: readonly GermanLesson[], strengthLevel = 1): { progress: number; beatenOn: string | null } {
+export function bossState(b: Boss, lessons: readonly GermanLesson[], strengthL2On: string | null = null): { progress: number; beatenOn: string | null } {
   if (b.auto === "nicos_weg") {
     const dates = lessons.map((l) => l.date).sort();
     const progress = Math.min(b.target, lessons.length);
     return { progress, beatenOn: lessons.length >= b.target ? dates[b.target - 1] : null };
   }
   if (b.auto === "strength_level") {
-    // Strength levels arrive in Phase 2c; until then this stays at 0.
-    const progress = strengthLevel >= 2 ? 1 : 0;
-    return { progress, beatenOn: progress >= b.target ? b.doneOn : null };
+    // Beaten the Monday you reach Strength Level 2 (training.ts).
+    return { progress: strengthL2On ? 1 : 0, beatenOn: strengthL2On };
   }
   const progress = Math.min(b.target, b.progress);
   return { progress, beatenOn: progress >= b.target ? b.doneOn : null };
@@ -225,7 +224,7 @@ export function questXp(d: GameData, today: string, inRange: (date: string) => b
     if (inRange(l.date))
       out.push({ source: `german:${l.lesson}`, skill: "mind", amount: GERMAN_XP, date: l.date, reason: `Nicos Weg lesson ${l.lesson}${l.title ? `: ${l.title}` : ""}`.slice(0, 120) });
   for (const b of d.bosses ?? []) {
-    const s = bossState(b, d.german ?? []);
+    const s = bossState(b, d.german ?? [], d.strengthL2On ?? null);
     if (s.beatenOn && inRange(s.beatenOn))
       out.push({ source: `boss:${b.id}`, skill: b.skill, amount: BOSS_XP, date: s.beatenOn, reason: `Boss beaten: ${b.title}`.slice(0, 120) });
   }
