@@ -13,7 +13,7 @@ A personal life operating system: one place for uni, career, wellbeing, creativi
 | **Studio** | Songwriting drafts (lyrics, key, tempo, chords) |
 | **Ledger** | Budget, savings goal, spending categories |
 | **AI chat** | Gemini companion that can add tasks to Saisha OS |
-| **Daily Planner** (`/planner`) | Today view, deep work and course prep to-do lists that roll over, habits and water, gym A/B plan, AI evening review, CSV export |
+| **Daily Planner** (`/`, `/planner`) | The whole app now: Today, deep work and course prep lists that roll over, habits and water, gym, AI evening review, plus Study (courses, grades, career), Care, Music Room, Treasury and Lumi chat |
 
 Data syncs to Supabase when you're signed in, and falls back to `localStorage` when Supabase isn't configured.
 
@@ -23,7 +23,7 @@ Data syncs to Supabase when you're signed in, and falls back to `localStorage` w
 - **Backend:** one Cloudflare Worker ([`worker.ts`](worker.ts)) that serves the static build and the `/api/*` routes
 - **Database and auth:** Supabase (Postgres with Row Level Security on every table; Google and email sign-in)
 - **AI:** Google Gemini via `@google/genai`, called only from the Worker
-- **Tests:** Vitest (104 tests)
+- **Tests:** Vitest (123 tests)
 
 ## Project structure
 
@@ -37,6 +37,8 @@ src/planner/                   Daily Planner
   gym.ts                       Gym sessions by weekday, yoga timer, weights, India time
   workouts.ts                  Exercise catalogue, swaps, your own Day A / B (just today or always)
   water.ts                     Water in ml: bottle, anchors, other drinks, gradual weekly goal
+  more.tsx, records.ts, db.ts  Screens moved from the old dashboard: courses, career, Care, Music Room, Treasury, Lumi, About me, backup
+worker/lumi/                   Lumi chat API (POST /api/lumi/chat)
   sound.ts                     Sounds (Web Audio) and vibration, with settings
   ui.tsx                       Enchanted Kingdom look: stars, Lumi, orb ticks, bouncy buttons
   validate.ts                  Anti-hallucination validation for AI plans
@@ -115,7 +117,14 @@ In **Authentication → URL Configuration**:
 | `/planner/gym` | Today's session: strength (Mon/Wed/Fri), cardio + core (Tue/Thu), yoga (Sat), rest (Sun) |
 | `/planner/habits` | Habits, water and the last 7 days |
 | `/planner/review` | Evening review, CSV export, prototype backup import |
-| `/planner/settings` | My workouts (undo swaps), sound and vibration |
+| `/planner/settings` | About me, my workouts, water, sound, currency, backup, sign out |
+| `/planner/more` | Menu: review, Care, Lumi, Music Room, Treasury, settings |
+| `/planner/care` | Skin, hair, mood, private journal |
+| `/planner/lumi` | Chat with Lumi (can suggest tasks; you tap Add) |
+| `/planner/music` | Songs, lyrics, chords, versions |
+| `/planner/treasury` | Savings, monthly budget, spending, bucket list |
+
+`/` opens the planner too. The old dashboard is kept **read-only** at `/classic` until it's removed.
 
 Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at `/planner`, with shortcuts to Deep, Study, Habits and Review.
 
@@ -164,9 +173,10 @@ Tests prove it: `src/planner/validate.test.ts` and `worker/planner/api.test.ts` 
 
 ## Known issues / tech debt
 
-- **`journal_entries` row IDs aren't per user.** Sanctuary builds them from the date only (`toUUID("journal-" + date)`), so two accounts could collide. (`health_logs` had the same problem; it's fixed: rows are matched on `(user_id, metric, logged_at)`.)
+- **Fixed:** `health_logs` and `journal_entries` rows used IDs built from the date (and metric) only, so two accounts could collide. They're now matched on `(user_id, metric, logged_at)` and `(user_id, entry_date)`.
 - **Old `water_cups` rows are kept** after converting them to `water_ml`; nothing reads them any more. They can be deleted later.
 - **AI chat bugs (`/api/saisha/interact`).** The live handler reads `role`/`content`, but the app sends `sender`/`text`, and its task inserts use columns that don't exist. To be fixed on `fix/ai-chat`.
+- **Old dashboard (`/classic`)** is read-only (its sync functions are switched off there) and will be deleted once everything is confirmed. `/api/saisha/interact` (its chat) is replaced by `/api/lumi/chat`.
 - **Legacy files.** [`server.ts`](server.ts) (old AI Studio Express server, `npm run dev:express-legacy`) and the Pages Functions layout in `functions/` are legacy. `functions/api/saisha/interact.ts` is still imported by `worker.ts` until it moves into `worker/`. `assets/.aistudio` and `metadata.json` are AI Studio leftovers.
 - **Approving tomorrow's list isn't atomic.** It's several Supabase calls; a failure halfway could leave a partial list. Approving again fixes it. A Postgres function would make it atomic.
 - **No offline mode.** There's no service worker yet, so the planner needs a connection.
