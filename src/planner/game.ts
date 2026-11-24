@@ -31,7 +31,7 @@ export const SKILLS: SkillInfo[] = [
   { key: "body", name: "Body", island: "Crystal Mountains", path: "/planner/gym" },
   { key: "mind", name: "Mind", island: "Library of Stars", path: "/planner/study" },
   { key: "business", name: "Business", island: "Market Square", path: "/planner/deep" },
-  { key: "glow", name: "Glow", island: "Moonlit Garden", path: "/planner/habits" },
+  { key: "glow", name: "Glow", island: "Moonlit Garden", path: "/planner/care" },
   { key: "family", name: "Family", island: "Riverside Cottage", path: "/planner/habits" },
 ];
 export const SKILL_KEYS = SKILLS.map((s) => s.key);

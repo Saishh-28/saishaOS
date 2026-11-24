@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Block, SCHEDULE } from "./plan";
 import { Kingdom } from "./kingdom";
+import { careCsvRows } from "./care";
 import { NextMealCard } from "./mealsScreen";
 import { Habits, isComebackWeek, levelOn, MAX_TRAINING_LEVEL, sessionAtLevel, sessionsBetween, suggestWeight, Track, TrackLevel } from "./training";
 import { ANCHORS, anchorMl, daysAtGoalThisWeek, DRINKS, GLASS_ML, litres, waterMilestone } from "./water";
@@ -1205,14 +1206,32 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
     [today, p.lists, snap, p.water, p.waterGoalMl, notes],
   );
 
-  const csv = () => {
+  const csv = async () => {
     const days = [...snap.days.keys()].map((date) => ({
       date,
       lists: snap.days.get(date)!.lists,
       habits: snap.habits.get(date) ?? {},
       water: snap.water.get(date) ?? 0,
     }));
-    return toCsv(csvRows(days, p.tasksById, snap.done));
+    const rows = csvRows(days, p.tasksById, snap.done);
+    // Care data (Phase 2.5): skincare, skin, hair, journal, book notes.
+    if (snap.careReady) {
+      let journal: { date: string; content: string; shared: boolean }[] = [];
+      let books: { id: string; title: string }[] = [];
+      let notes: { bookId: string; date: string; section: string; mainIdea: string | null; experiment: string | null; result: string | null }[] = [];
+      if (supabase) {
+        const [j, b, n] = await Promise.all([
+          supabase.from("journal_entries").select("entry_date,content,share_with_lumi").neq("content", ""),
+          supabase.from("books").select("id,title"),
+          supabase.from("book_notes").select("book_id,note_date,section,main_idea,experiment,result"),
+        ]);
+        journal = (j.data ?? []).map((r: any) => ({ date: r.entry_date, content: r.content, shared: !!r.share_with_lumi }));
+        books = (b.data ?? []) as any;
+        notes = (n.data ?? []).map((r: any) => ({ bookId: r.book_id, date: r.note_date, section: r.section, mainIdea: r.main_idea, experiment: r.experiment, result: r.result }));
+      }
+      rows.push(...careCsvRows({ steps: snap.careSteps, skin: snap.skin, hair: snap.hair, journal, books, notes }));
+    }
+    return toCsv(rows);
   };
 
   return (
@@ -1315,14 +1334,14 @@ export function ReviewScreen({ p, today, toast }: ScreenProps) {
           One row per task, habit and water (ml) per day: <code>date, category, item, done</code>.
         </p>
         <div className="row">
-          <button className="btn" onClick={() => download(`saisha-planner-${today}.csv`, csv(), "text/csv")}>
+          <button className="btn" onClick={async () => download(`saisha-planner-${today}.csv`, await csv(), "text/csv")}>
             Download CSV
           </button>
           <button
             className="btn ghost"
             onClick={async () => {
               try {
-                await navigator.clipboard.writeText(csv());
+                await navigator.clipboard.writeText(await csv());
                 toast("CSV copied");
               } catch {
                 toast("Couldn't copy. Use Download instead.");

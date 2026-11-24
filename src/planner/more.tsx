@@ -64,7 +64,7 @@ const MORE: { to: string; title: string; sub: string }[] = [
   { to: "/planner/quests", title: "Quests", sub: "Daily, weekly, Nicos Weg German, boss battles" },
   { to: "/planner/rewards", title: "Rewards", sub: "Coins, your reward list, dreams" },
   { to: "/planner/review", title: "Evening review", sub: "Report, plan tomorrow with Lumi, CSV" },
-  { to: "/planner/care", title: "Care · Moonlit Garden", sub: "Skin, hair, mood, journal" },
+  { to: "/planner/care", title: "Care · Moonlit Garden", sub: "Skincare, hair, mood, journal, book notes" },
   { to: "/planner/lumi", title: "Talk to Lumi", sub: "Your star spirit; can suggest tasks" },
   { to: "/planner/music", title: "Music Room", sub: "Songs, lyrics, chords" },
   { to: "/planner/treasury", title: "Treasury · Market Square", sub: "Savings, budget, spending" },

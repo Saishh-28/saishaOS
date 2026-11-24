@@ -2076,3 +2076,110 @@ body:has(.planner) {
   padding: 8px 10px;
   resize: vertical;
 }
+
+/* Phase 2.5: Care */
+.planner .quest.optional {
+  opacity: 0.7;
+}
+.planner .care-h3 {
+  font-size: 14px;
+  margin: 10px 0 6px;
+  color: var(--muted);
+}
+.planner ul.step-edit {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.planner ul.step-edit li {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 6px;
+  align-items: center;
+}
+.planner ul.step-edit input,
+.planner ul.step-edit select {
+  min-width: 0;
+}
+.planner ul.step-edit .btn {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  padding: 0;
+}
+.planner .scale {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+.planner .scale .chip-btn,
+.planner .tag-row .chip-btn {
+  min-height: var(--tap);
+}
+.planner .scale-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 2px;
+}
+.planner .tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.planner .tag-row .chip-btn {
+  padding: 0 12px;
+}
+.planner .note.hair-due {
+  margin-bottom: 8px;
+  border-color: rgba(216, 198, 255, 0.5);
+}
+.planner .check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--tap);
+  margin-top: 8px;
+  font-weight: 700;
+}
+.planner .check-row input {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+}
+.planner .book-open {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.planner .book-note {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--glass);
+  margin-bottom: 8px;
+}
+.planner .book-note p {
+  margin: 4px 0;
+}
+.planner .book-note-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.planner .stack textarea {
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--well);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+}
+.planner svg.trend {
+  width: 100%;
+  height: auto;
+  display: block;
+}

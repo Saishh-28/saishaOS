@@ -31,6 +31,7 @@ import type { TrackLevel } from "./training";
 import { QuestsScreen, RewardsScreen } from "./questScreens";
 import { CalendarScreen } from "./calendarScreen";
 import { MealsScreen } from "./mealsScreen";
+import { CareScreen2 } from "./careScreen";
 import "./planner.css";
 
 const NAV: { v: PlannerView; label: string }[] = [
@@ -333,7 +334,7 @@ export default function PlannerApp() {
         ) : view === "more" ? (
           <MoreScreen />
         ) : view === "care" ? (
-          <CareScreen {...more} />
+          p.snap?.careReady ? <CareScreen2 {...more} /> : <CareScreen {...more} />
         ) : view === "lumi" ? (
           <LumiScreen {...more} />
         ) : view === "music" ? (
