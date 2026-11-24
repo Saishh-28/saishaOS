@@ -13,6 +13,7 @@
 import { addDays, Completions, DayLists, dayProgress, PlanTask } from "./logic";
 import { Block, GYM_HABIT, HABITS } from "./plan";
 import { ExerciseLogs, sessionFor } from "./gym";
+import { Boss, GermanLesson, questXp } from "./quests";
 
 export type Skill = "body" | "mind" | "business" | "glow" | "family";
 
@@ -85,6 +86,10 @@ export interface GameData {
   habits: ReadonlyMap<string, Readonly<Record<string, boolean>>>;
   water: ReadonlyMap<string, number>;
   exercises: ExerciseLogs;
+  /** Nicos Weg lessons done (Phase 2b). */
+  german?: readonly GermanLesson[];
+  /** Boss battles (Phase 2b). */
+  bosses?: readonly Boss[];
 }
 
 const inRange = (date: string, today: string) => date >= GAME_START && date <= today;
@@ -140,6 +145,8 @@ export function earnedXp(d: GameData, today: string, waterGoalOn: (date: string)
       if (prev == null || w > prev) best.set(key, w);
     }
   }
+  // Daily / weekly quests, Nicos Weg lessons, beaten bosses.
+  out.push(...questXp(d, today, (date) => inRange(date, today)));
   return out;
 }
 

@@ -23,7 +23,7 @@ describe("the new study plan", () => {
     expect(JS_TRACK[16]).toMatch(/src\/planner\/logic\.ts/);
     expect([...R_TRACK, ...JS_TRACK].every((t) => /^(Read|Practice|Mini-project|Make one small change)/.test(t))).toBe(true);
     expect(SAT_TRACK[0]).toMatch(/^Light review/);
-    expect(SAT_TRACK[1]).toBe("German: read one DW A1 lesson (dw.com/learngerman) + write 3 sentences");
+    expect(SAT_TRACK[1]).toMatch(/^Light review/); // Phase 2b: Nicos Weg replaced the German Saturdays
   });
 
   it("Mon/Wed/Fri = R, Tue/Thu = JS, Sat = review/German, Sun = rest; starts 24 Nov", () => {

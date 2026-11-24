@@ -5,7 +5,7 @@
  *
  *   Mon, Wed, Fri  R track        (r4ds.hadley.nz 2nd edition + quarto.org)
  *   Tue, Thu       JS track       (javascript.info → TypeScript handbook → react.dev/learn)
- *   Sat            light review / German (alternating)
+ *   Sat            light review (German is the daily Nicos Weg quest, see quests.ts)
  *   Sun            rest
  *
  * One task per session. Each day gets the first unfinished task of its
@@ -24,7 +24,7 @@ export const STUDY_PLAN_END = "2027-02-20";
 export const TRACK_LABEL: Record<StudyTrack, string> = {
   r: "R (r4ds + Quarto)",
   js: "JavaScript → TypeScript → React",
-  sat: "Light review / German",
+  sat: "Light review",
 };
 
 const PRACTICE = [
@@ -109,12 +109,12 @@ export const JS_TRACK: string[] = [
   "Make one small change yourself: add a test to water.test.ts, and open a PR",
 ];
 
-/** Saturdays from 28 Nov 2026 to 20 Feb 2027: review and German, alternating. */
-export const SAT_TRACK: string[] = Array.from({ length: 13 }, (_, i) =>
-  i % 2 === 0
-    ? "Light review: re-read this week's R + JS notes"
-    : "German: read one DW A1 lesson (dw.com/learngerman) + write 3 sentences",
-);
+/**
+ * Saturdays from 28 Nov 2026 to 20 Feb 2027: light review every week.
+ * (Until Phase 2b, even ones were a DW German task; Nicos Weg replaced it.
+ * The 2b migration renamed those rows in plan_tasks.)
+ */
+export const SAT_TRACK: string[] = Array.from({ length: 13 }, () => "Light review: re-read this week's R + JS notes");
 
 export const TRACKS: Record<StudyTrack, string[]> = { r: R_TRACK, js: JS_TRACK, sat: SAT_TRACK };
 
