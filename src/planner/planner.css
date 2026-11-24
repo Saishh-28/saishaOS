@@ -1149,6 +1149,142 @@ body:has(.planner) {
   cursor: default;
 }
 
+/* Part D: one app */
+.planner .more-list a {
+  min-height: 60px;
+}
+.planner .term {
+  margin-top: 10px;
+}
+.planner .term-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 4px 0;
+  color: #fff1c9;
+}
+.planner .course-row {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tap);
+  padding: 8px 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.planner li.course {
+  flex-wrap: wrap;
+}
+.planner .course-edit {
+  flex: 1 0 100%;
+  padding: 6px 0 12px;
+}
+.planner .mini-head {
+  display: block;
+  margin-top: 8px;
+  font-size: 14px;
+}
+.planner .field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 100px;
+}
+.planner .wide-field {
+  margin-bottom: 8px;
+}
+.planner select,
+.planner input[type="date"] {
+  min-height: var(--tap);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 14px;
+  padding: 8px 10px;
+  font: inherit;
+  background: rgba(4, 8, 30, 0.45);
+  color: var(--ink);
+  color-scheme: dark;
+}
+.planner .add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+.planner .warn {
+  color: #ffb4a8;
+  font-size: 13px;
+  font-weight: 700;
+}
+.planner .mood {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 6px;
+}
+.planner .seg.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+.planner textarea.lyrics {
+  min-height: 220px;
+}
+.planner .chat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.planner .chat-list li {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+.planner .chat-list li.me {
+  justify-content: flex-end;
+}
+.planner .chat-bubble {
+  max-width: 82%;
+  padding: 10px 12px;
+  border-radius: 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+}
+.planner .chat-list li.lumi .chat-bubble {
+  background: rgba(255, 251, 233, 0.95);
+  color: var(--deep-ink);
+  border-bottom-left-radius: 4px;
+}
+.planner .chat-list li.me .chat-bubble {
+  background: rgba(142, 230, 224, 0.2);
+  border: 1px solid rgba(142, 230, 224, 0.35);
+  border-bottom-right-radius: 4px;
+}
+.planner .chat-av {
+  flex: 0 0 28px;
+}
+.planner .suggested {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 231, 168, 0.5);
+}
+.planner .card.chat {
+  margin-bottom: 72px;
+}
+.planner .chat-input {
+  position: sticky;
+  bottom: calc(92px + env(safe-area-inset-bottom));
+}
+.planner .reminder {
+  border-color: rgba(255, 217, 138, 0.5);
+}
+
 /* Reduced motion: decoration stops; state changes (fills, colours) still show. */
 @media (prefers-reduced-motion: reduce) {
   .planner .k-stars span,

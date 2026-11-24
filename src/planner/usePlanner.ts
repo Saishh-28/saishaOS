@@ -199,7 +199,8 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     );
   };
 
-  const addCustom = (block: Block, text: string) => {
+  /** Add your own task to today (`ai`: suggested by Lumi, shown with ✨). */
+  const addCustom = (block: Block, text: string, ai = false) => {
     const clean = text.trim().slice(0, 500);
     if (!store || !day || !clean) return;
     const task: PlanTask = {
@@ -209,7 +210,7 @@ export function usePlanner(store: PlannerStore | null, today: string) {
       phaseStart: today,
       sortOrder: CUSTOM_SORT_BASE + (snap?.tasks.filter((t) => t.isCustom).length ?? 0),
       isCustom: true,
-      isAi: false,
+      isAi: ai,
     };
     const position = day.lists[block].length;
     const item = { taskId: task.id, carriedOver: false };
@@ -418,6 +419,7 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     fromBottle,
     setFromBottle,
     setSetting,
+    settings,
     toggleDone,
     removeTask,
     addCustom,

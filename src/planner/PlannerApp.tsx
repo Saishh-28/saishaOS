@@ -11,6 +11,21 @@ import { Link, PlannerView, pathForView, usePathname, viewFromPath } from "./rou
 import { LocalStore, PlannerStore, SupabaseStore } from "./store";
 import { usePlanner } from "./usePlanner";
 import { BlockScreen, GymScreen, HabitsScreen, ReviewScreen, ScreenProps, SettingsScreen, TodayScreen } from "./screens";
+import {
+  AboutMeCard,
+  BackupCard,
+  CareerCard,
+  CareScreen,
+  CoursesCard,
+  CurrencyCard,
+  CurrencyReminder,
+  LumiScreen,
+  MoreScreen,
+  MusicScreen,
+  SignOutCard,
+  TreasuryScreen,
+} from "./more";
+import { BUCKET_IMPORTED_FLAG, bucketItemsToImport, OLD_BUCKET_KEY, parseCurrency, showCurrencyReminder } from "./records";
 import "./planner.css";
 
 const NAV: { v: PlannerView; label: string }[] = [
@@ -19,8 +34,11 @@ const NAV: { v: PlannerView; label: string }[] = [
   { v: "study", label: "Study" },
   { v: "gym", label: "Gym" },
   { v: "habits", label: "Habits" },
-  { v: "review", label: "Review" },
+  { v: "more", label: "More" },
 ];
+
+/** Screens reached from the More tab (it stays highlighted on them). */
+const UNDER_MORE: PlannerView[] = ["more", "review", "settings", "care", "lumi", "music", "treasury"];
 
 const TITLES: Record<PlannerView, string> = {
   today: "Today",
@@ -30,6 +48,11 @@ const TITLES: Record<PlannerView, string> = {
   habits: "Habits",
   review: "Evening review",
   settings: "Settings",
+  more: "More",
+  care: "Care",
+  lumi: "Lumi",
+  music: "Music Room",
+  treasury: "Treasury",
 };
 
 /** Dev only: /planner?date=2026-11-23 pretends today is that date (for testing gym days, rollover, etc.). */
@@ -160,6 +183,24 @@ export default function PlannerApp() {
     document.title = `${TITLES[view]} · Saisha Planner`;
   }, [view]);
 
+  // One-time import of the old dashboard's bucket list from this browser (it was never synced).
+  useEffect(() => {
+    if (!supabase || !userId || localStorage.getItem(BUCKET_IMPORTED_FLAG)) return;
+    const raw = localStorage.getItem(OLD_BUCKET_KEY);
+    if (!raw) return;
+    (async () => {
+      const existing = await supabase!.from("bucket_list").select("title").eq("user_id", userId);
+      if (existing.error) return;
+      const items = bucketItemsToImport(raw, (existing.data ?? []).map((r: any) => r.title));
+      if (items.length) {
+        const r = await supabase!.from("bucket_list").insert(items.map((i) => ({ ...i, user_id: userId })));
+        if (r.error) return console.warn("[planner] bucket list import failed", r.error.message);
+        toast(`Imported ${items.length} bucket list item${items.length > 1 ? "s" : ""} from this browser`);
+      }
+      localStorage.setItem(BUCKET_IMPORTED_FLAG, new Date().toISOString());
+    })();
+  }, [userId]);
+
   // Morning chime: first tap of the day before noon (browsers don't allow sound before a tap).
   useEffect(() => {
     sfx.onUnlock = () => sfx.wakeUpOnce(today, clockIn(new Date()).hour);
@@ -182,6 +223,11 @@ export default function PlannerApp() {
   const cur = currentSlotIndex(minutes);
   const firstName = (session?.user?.user_metadata?.full_name as string | undefined)?.split(" ")[0] || "Saish";
   const props: ScreenProps = { p, today, minutes, toast };
+  const more = { p, today, userId, toast };
+  const reminder =
+    view === "today" &&
+    !!p.snap &&
+    showCurrencyReminder(today, parseCurrency(p.settings.currency), p.settings.currency_reminder_dismissed === true);
   const loaded = !!p.snap && !!p.day;
 
   return (
@@ -229,17 +275,40 @@ export default function PlannerApp() {
             <div className="muted">{p.error ? "Couldn't load your planner." : "Loading your day…"}</div>
           </div>
         ) : view === "today" ? (
-          <TodayScreen {...props} />
+          <>
+            {reminder && <CurrencyReminder p={p} toast={toast} />}
+            <TodayScreen {...props} />
+          </>
         ) : view === "deep" ? (
           <BlockScreen {...props} block="deep" />
         ) : view === "study" ? (
-          <BlockScreen {...props} block="study" />
+          <>
+            <BlockScreen {...props} block="study" />
+            <CoursesCard {...more} />
+            <CareerCard {...more} />
+          </>
         ) : view === "gym" ? (
           <GymScreen {...props} />
         ) : view === "habits" ? (
           <HabitsScreen {...props} />
         ) : view === "settings" ? (
-          <SettingsScreen {...props} />
+          <>
+            <AboutMeCard {...more} />
+            <SettingsScreen {...props} />
+            <CurrencyCard {...more} />
+            <BackupCard {...more} />
+            <SignOutCard />
+          </>
+        ) : view === "more" ? (
+          <MoreScreen />
+        ) : view === "care" ? (
+          <CareScreen {...more} />
+        ) : view === "lumi" ? (
+          <LumiScreen {...more} />
+        ) : view === "music" ? (
+          <MusicScreen {...more} />
+        ) : view === "treasury" ? (
+          <TreasuryScreen {...more} />
         ) : (
           <React.Fragment key={today}>
             <ReviewScreen {...props} />
@@ -251,7 +320,12 @@ export default function PlannerApp() {
       </main>
       <nav className="p-nav" aria-label="Planner sections">
         {NAV.map((n) => (
-          <Link key={n.v} to={pathForView(n.v)} className={n.v === view ? "active" : ""} aria-current={n.v === view ? "page" : undefined}>
+          <Link
+            key={n.v}
+            to={pathForView(n.v)}
+            className={n.v === view || (n.v === "more" && UNDER_MORE.includes(view)) ? "active" : ""}
+            aria-current={n.v === view ? "page" : undefined}
+          >
             <span className="ic">
               <Icon name={n.v} />
             </span>

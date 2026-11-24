@@ -5,13 +5,30 @@
  */
 import React, { useEffect, useState } from "react";
 
-export const PLANNER_VIEWS = ["today", "deep", "study", "gym", "habits", "review", "settings"] as const;
+export const PLANNER_VIEWS = [
+  "today",
+  "deep",
+  "study",
+  "gym",
+  "habits",
+  "review",
+  "settings",
+  "more",
+  "care",
+  "lumi",
+  "music",
+  "treasury",
+] as const;
 export type PlannerView = (typeof PLANNER_VIEWS)[number];
 
 const NAV_EVENT = "planner:navigate";
 
+/** The old dashboard, kept read-only at /classic until it's removed. */
+export const CLASSIC_PATH = "/classic";
+
+/** Everything except /classic is the planner now (one app). "/" opens Home. */
 export function isPlannerPath(pathname: string): boolean {
-  return pathname === "/planner" || pathname.startsWith("/planner/");
+  return pathname.replace(/\/+$/, "") !== CLASSIC_PATH;
 }
 
 export function viewFromPath(pathname: string): PlannerView {
