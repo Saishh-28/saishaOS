@@ -2303,3 +2303,13 @@ body:has(.planner) {
   font-size: 22px;
   line-height: 1;
 }
+
+/* Local development: which data you're on */
+.planner .mode.dev {
+  background: rgba(142, 230, 224, 0.2);
+  color: #bff3f0;
+}
+.planner .mode.real {
+  background: rgba(255, 120, 120, 0.25);
+  color: #ffd0d0;
+}

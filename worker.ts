@@ -15,6 +15,7 @@ import { handlePlannerApi } from "./worker/planner/api";
 import { makePlannerDeps, PlannerEnv } from "./worker/planner/deps";
 import { handleLumiApi } from "./worker/lumi/api";
 import { makeLumiDeps } from "./worker/lumi/deps";
+import { LOCAL_REAL_DATA_MESSAGE, localRealDataBlocked } from "./src/devGuard";
 
 interface Env extends PlannerEnv {
   ASSETS?: {
@@ -30,6 +31,14 @@ interface ExecutionContext {
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    // Local development must use a test Supabase project (see src/devGuard.ts).
+    if ((url.pathname.startsWith("/api/planner/") || url.pathname.startsWith("/api/lumi/")) && localRealDataBlocked(url, env as any)) {
+      return new Response(JSON.stringify({ error: LOCAL_REAL_DATA_MESSAGE }), {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
     // Daily Planner API (auth-checked, Gemini evening review)
     if (url.pathname.startsWith("/api/planner/")) {
