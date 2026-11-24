@@ -12,7 +12,6 @@
     "test:watch": "vitest",
     "lint": "tsc --noEmit",
     "cf-typegen": "wrangler types",
-    "dev:express-legacy": "tsx server.ts",
     "clean": "rm -rf dist"
   },
   "dependencies": {

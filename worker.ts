@@ -6,14 +6,11 @@
  * Routes:
  *   POST /api/planner/review, /api/planner/review/approve → Daily Planner AI review (worker/planner)
  *   POST /api/lumi/chat → Lumi chat (worker/lumi)
- *   POST /api/saisha/interact → LEGACY AI chat for the old dashboard (functions/api/saisha/interact.ts),
- *     kept until the old dashboard is removed
  *   GET  /api/health
  *   everything else → static assets from the Vite build, with SPA fallback to index.html
  *     (assets.not_found_handling = "single-page-application"), so deep links such as
  *     /planner/deep load the app directly.
  */
-import { onRequestPost } from "./functions/api/saisha/interact";
 import { handlePlannerApi } from "./worker/planner/api";
 import { makePlannerDeps, PlannerEnv } from "./worker/planner/deps";
 import { handleLumiApi } from "./worker/lumi/api";
@@ -46,26 +43,6 @@ export default {
       const auth = request.headers.get("Authorization") ?? "";
       const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
       return handleLumiApi(request, url.pathname, makeLumiDeps(env, token));
-    }
-
-    // LEGACY: old dashboard chat (replaced by /api/lumi/chat)
-    if (url.pathname === "/api/saisha/interact") {
-      if (request.method === "POST") {
-        const context: any = {
-          request,
-          env,
-          waitUntil: (promise: Promise<any>) => ctx.waitUntil(promise),
-          next: () => (env.ASSETS ? env.ASSETS.fetch(request) : fetch(request)),
-          params: {},
-          data: {},
-          functionPath: url.pathname,
-        };
-        return onRequestPost(context);
-      }
-      return new Response(JSON.stringify({ error: "Method not allowed" }), {
-        status: 405,
-        headers: { "Content-Type": "application/json" },
-      });
     }
 
     // Health check endpoint
