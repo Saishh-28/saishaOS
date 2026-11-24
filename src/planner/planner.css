@@ -1745,3 +1745,232 @@ body:has(.planner) {
   display: block;
   margin-top: 6px;
 }
+
+/* Phase 3: progress calendar (docs/design/Calendar.dc.html) */
+.planner a.k-streak {
+  text-decoration: none;
+}
+.planner .journey {
+  display: grid;
+  grid-template-columns: repeat(13, minmax(0, 1fr));
+  gap: 4px;
+}
+.planner .jw {
+  height: 14px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.planner .jw.gold {
+  background: linear-gradient(180deg, #fff1c9, #ffd98a);
+  box-shadow: 0 0 8px rgba(255, 217, 138, 0.6);
+}
+.planner .jw.aqua {
+  background: rgba(142, 230, 224, 0.55);
+}
+.planner .jw.dim {
+  background: rgba(255, 255, 255, 0.22);
+}
+.planner .jw.current {
+  outline: 1.5px solid #ffd98a;
+  outline-offset: 1px;
+}
+.planner .journey-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.planner .cal-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.planner .cal-stats .stat {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+}
+.planner .cal-stats b {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 24px;
+  line-height: 1.1;
+}
+.planner .cal-stats span {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.planner .cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.planner .cal-head .btn {
+  min-width: var(--tap);
+  min-height: var(--tap);
+  font-size: 22px;
+}
+.planner .cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+.planner .cal-wd {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--muted);
+}
+.planner .cal-day {
+  position: relative;
+  min-height: var(--tap);
+  border-radius: 12px;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  color: #e3dafa;
+  background: rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+}
+.planner .cal-day.gold {
+  background: linear-gradient(180deg, #fff1c9, #ffd98a);
+  box-shadow: 0 0 10px rgba(255, 217, 138, 0.55);
+  color: #2e2160;
+  animation: k-glow 2.6s ease-in-out infinite;
+}
+.planner .cal-day.aqua {
+  background: rgba(142, 230, 224, 0.45);
+  color: #f6f0ff;
+}
+.planner .cal-day.rest {
+  background: rgba(216, 198, 255, 0.16);
+  border: 1px solid rgba(216, 198, 255, 0.35);
+}
+.planner .cal-day.today {
+  background: rgba(255, 217, 138, 0.18);
+  border: 2px solid #ffd98a;
+  color: #ffe7b3;
+}
+.planner .cal-day.future {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.14);
+  color: #9f94c4;
+  cursor: default;
+}
+.planner .cal-day.outside {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.25);
+  cursor: default;
+}
+.planner .cal-day .marks {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  display: flex;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1;
+}
+.planner .m-gym {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #8ee6e0;
+  box-shadow: 0 0 4px #8ee6e0;
+}
+.planner .m-star,
+.planner .m-shield {
+  font-style: normal;
+  font-size: 9px;
+  color: #ffd98a;
+}
+.planner .m-shield {
+  color: #d8c6ff;
+}
+.planner .cal-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.planner .cal-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.planner .cal-legend .sw {
+  width: 12px;
+  height: 12px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.planner .cal-legend .sw.aqua {
+  background: rgba(142, 230, 224, 0.45);
+}
+.planner .cal-legend .sw.gold {
+  background: #ffd98a;
+}
+.planner .cal-legend .sw.rest {
+  background: rgba(216, 198, 255, 0.3);
+}
+.planner ul.growth {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.planner ul.growth li {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 800;
+}
+.planner .g-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(10, 6, 40, 0.55);
+  overflow: hidden;
+}
+.planner .g-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+.planner .g-gain {
+  color: #ffe7b3;
+}
+.planner .day-sheet h3 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 15px;
+  margin: 14px 0 6px;
+  display: flex;
+  justify-content: space-between;
+}
+.planner .day-sheet {
+  max-height: 85vh;
+  overflow-y: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .planner .cal-day.gold {
+    animation: none;
+  }
+}

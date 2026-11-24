@@ -74,7 +74,7 @@ export function LevelCard({ game }: { game: Game }) {
             </Link>
           )}
         </div>
-        <div className="k-streak" role="img" aria-label={`Streak: ${streak.current} day${streak.current === 1 ? "" : "s"}, ${shieldText}`}>
+        <Link to="/planner/calendar" className="k-streak" aria-label={`Streak: ${streak.current} day${streak.current === 1 ? "" : "s"}, ${shieldText}. Open the calendar`}>
           <Flame />
           <b>{streak.current}</b>
           <span className="k-shields">
@@ -84,7 +84,7 @@ export function LevelCard({ game }: { game: Game }) {
               </React.Fragment>
             ))}
           </span>
-        </div>
+        </Link>
       </div>
       <div className="k-xpbar" role="progressbar" aria-label="XP to the next level" aria-valuemin={0} aria-valuemax={level.needed} aria-valuenow={level.into}>
         <div className="fill" style={{ width: `${level.pct}%` }} />

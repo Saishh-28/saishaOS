@@ -29,6 +29,7 @@ import { BUCKET_IMPORTED_FLAG, bucketItemsToImport, OLD_BUCKET_KEY, parseCurrenc
 import { LevelUpOverlay } from "./kingdom";
 import type { TrackLevel } from "./training";
 import { QuestsScreen, RewardsScreen } from "./questScreens";
+import { CalendarScreen } from "./calendarScreen";
 import "./planner.css";
 
 const NAV: { v: PlannerView; label: string }[] = [
@@ -41,7 +42,7 @@ const NAV: { v: PlannerView; label: string }[] = [
 ];
 
 /** Screens reached from the More tab (it stays highlighted on them). */
-const UNDER_MORE: PlannerView[] = ["more", "review", "settings", "care", "lumi", "music", "treasury", "rewards"];
+const UNDER_MORE: PlannerView[] = ["more", "review", "settings", "care", "lumi", "music", "treasury", "rewards", "calendar"];
 
 const TITLES: Record<PlannerView, string> = {
   today: "Home",
@@ -58,6 +59,7 @@ const TITLES: Record<PlannerView, string> = {
   treasury: "Treasury",
   quests: "Quests",
   rewards: "Rewards",
+  calendar: "Calendar",
 };
 
 /** Dev only: /planner?date=2026-11-23 pretends today is that date (for testing gym days, rollover, etc.). */
@@ -338,6 +340,8 @@ export default function PlannerApp() {
           <TreasuryScreen {...more} />
         ) : view === "quests" ? (
           <QuestsScreen {...props} />
+        ) : view === "calendar" ? (
+          <CalendarScreen p={p} today={today} />
         ) : view === "rewards" ? (
           <RewardsScreen {...props} userId={userId} />
         ) : (
