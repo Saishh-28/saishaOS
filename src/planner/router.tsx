@@ -18,6 +18,8 @@ export const PLANNER_VIEWS = [
   "lumi",
   "music",
   "treasury",
+  "quests",
+  "rewards",
 ] as const;
 export type PlannerView = (typeof PLANNER_VIEWS)[number];
 

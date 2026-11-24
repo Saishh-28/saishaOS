@@ -59,6 +59,8 @@ const sure = (what: string) => window.confirm(`Delete ${what}? This can't be und
 /* ------------------------------------------------------------------ */
 
 const MORE: { to: string; title: string; sub: string }[] = [
+  { to: "/planner/quests", title: "Quests", sub: "Daily, weekly, Nicos Weg German, boss battles" },
+  { to: "/planner/rewards", title: "Rewards", sub: "Coins, your reward list, dreams" },
   { to: "/planner/review", title: "Evening review", sub: "Report, plan tomorrow with Lumi, CSV" },
   { to: "/planner/care", title: "Care · Moonlit Garden", sub: "Skin, hair, mood, journal" },
   { to: "/planner/lumi", title: "Talk to Lumi", sub: "Your star spirit; can suggest tasks" },
@@ -904,23 +906,14 @@ export function TreasuryScreen({ p, today, userId, toast }: MoreProps) {
         </ul>
       </div>
 
-      <div className="card">
-        <h2>
-          Bucket list <span className="sub">{bucket.rows?.length ?? 0}</span>
-        </h2>
-        <div className="muted">Kept safe here; it moves to Rewards in Phase 2.</div>
-        <ul className="tasks">
-          {(bucket.rows ?? []).map((b) => (
-            <li key={b.id} className={b.completed ? "done" : ""}>
-              <span className="txt">
-                {b.title}
-                {b.description ? <span className="muted"> · {b.description}</span> : null}
-              </span>
-            </li>
-          ))}
-          {bucket.rows && !bucket.rows.length && <li className="empty">Nothing yet.</li>}
-        </ul>
-      </div>
+      <ul className="links">
+        <li>
+          <Link to="/planner/rewards">
+            <b>Bucket list → Rewards</b>
+            <span className="muted">Your {bucket.rows?.length ?? 0} dreams live in Rewards now</span>
+          </Link>
+        </li>
+      </ul>
     </>
   );
 }

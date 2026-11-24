@@ -11,6 +11,7 @@ import type { Game } from "./usePlanner";
 import { Link } from "./router";
 import { Lumi, reducedMotion } from "./ui";
 import { sfx } from "./sound";
+import { TodaysQuestsCard } from "./questScreens";
 
 interface IslandLook {
   /** Position inside the 390 × 430 kingdom, in px of that box (scaled to %). */
@@ -67,6 +68,11 @@ export function LevelCard({ game }: { game: Game }) {
           <div className="muted small">
             {level.into} / {level.needed} XP{game.xpToday > 0 ? ` · +${game.xpToday} today` : ""}
           </div>
+          {game.quests && (
+            <Link to="/planner/rewards" className="coins-chip" aria-label={`${game.quests.coins.balance} coins: open Rewards`}>
+              ✦ {game.quests.coins.balance} coins
+            </Link>
+          )}
         </div>
         <div className="k-streak" role="img" aria-label={`Streak: ${streak.current} day${streak.current === 1 ? "" : "s"}, ${shieldText}`}>
           <Flame />
@@ -129,6 +135,7 @@ export function Kingdom({ game, fallback }: { game: Game; fallback: string }) {
       <div className="bubble k-bubble" role="status">
         {line}
       </div>
+      {game.quests && <TodaysQuestsCard q={game.quests} />}
     </>
   );
 }
