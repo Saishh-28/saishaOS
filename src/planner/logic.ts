@@ -408,7 +408,34 @@ export function greeting(hour: number): string {
   return hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 }
 
-/** Overall progress: tasks + habits + (reaching the water goal counts as one item). */
+/* ------------------------------------------------------------------ */
+/* Rest days                                                           */
+/* ------------------------------------------------------------------ */
+
+/** habit_logs key for a day you marked "Rest / sick day". */
+export const REST_DAY_KEY = "restDay";
+/** Rest / sick days you can mark per week (Mon–Sun); Sundays are rest anyway and don't count. */
+export const REST_DAYS_PER_WEEK = 2;
+/** On a rest day only these count (plus the water goal): no deep work, study or gym. */
+export const REST_DAY_HABITS = ["skinAM", "skinPM", "walkLunch", "walkDinner"];
+
+/** Sundays, and days marked "Rest / sick day". */
+export function isRestDay(date: string, habits: Readonly<Record<string, boolean>>): boolean {
+  return dayOfWeek(date) === 0 || !!habits[REST_DAY_KEY];
+}
+
+/** Rest / sick days still available in `date`'s week (Mon–Sun). */
+export function restDaysLeft(habitsByDate: ReadonlyMap<string, Readonly<Record<string, boolean>>>, date: string): number {
+  const monday = addDays(date, -((dayOfWeek(date) + 6) % 7));
+  let used = 0;
+  for (let i = 0; i < 6; i++) if (habitsByDate.get(addDays(monday, i))?.[REST_DAY_KEY]) used++;
+  return Math.max(0, REST_DAYS_PER_WEEK - used);
+}
+
+/**
+ * Overall progress: tasks + habits + (reaching the water goal counts as one item).
+ * On a rest day (when `date` is given): only the basic habits + water.
+ */
 export function dayProgress(args: {
   lists: DayLists;
   done: Completions;
@@ -419,14 +446,20 @@ export function dayProgress(args: {
   waterGoalMl?: number;
   /** When given, only the habits that apply on that date count (see habitsOn). */
   date?: string;
-}): { done: number; total: number; pct: number } {
+}): { done: number; total: number; pct: number; rest: boolean } {
+  const waterDone = args.water >= (args.waterGoalMl ?? 1250) ? 1 : 0;
+  if (args.date && isRestDay(args.date, args.habits)) {
+    const done = REST_DAY_HABITS.filter((k) => args.habits[k]).length + waterDone;
+    const total = REST_DAY_HABITS.length + 1;
+    return { done, total, pct: Math.round((done / total) * 100), rest: true };
+  }
   const habits = args.date ? habitsOn(args.date) : HABITS;
   const ids = [...args.lists.deep, ...args.lists.study].map((i) => i.taskId);
   const tdone = ids.filter((id) => args.done.has(id)).length;
   const hdone = habits.filter((h) => args.habits[h.key]).length;
   const total = ids.length + habits.length + 1;
-  const doneAll = tdone + hdone + (args.water >= (args.waterGoalMl ?? 1250) ? 1 : 0);
-  return { done: doneAll, total, pct: Math.round((doneAll / total) * 100) };
+  const doneAll = tdone + hdone + waterDone;
+  return { done: doneAll, total, pct: Math.round((doneAll / total) * 100), rest: false };
 }
 
 /* ------------------------------------------------------------------ */

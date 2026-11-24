@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { dayPct, earnedXp, levelInfo, LevelInfo, reconcileXp, Skill, SKILL_KEYS, streakInfo, StreakInfo, ticksToCount, xpTotals } from "./game";
+import { dayResult, earnedXp, levelInfo, LevelInfo, reconcileXp, Skill, SKILL_KEYS, streakInfo, StreakInfo, ticksToCount, xpTotals } from "./game";
 import { Block, GYM_HABIT } from "./plan";
 import { Anchor, anchorMl, clampDayMl, mondayOf, parseBottleMl, waterGoal } from "./water";
 import { ExerciseLog, GymSession, isSessionComplete } from "./gym";
@@ -437,16 +437,17 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     if (!snap || !snap.xpReady) return null;
     const totals = xpTotals(snap.xp);
     const skills = Object.fromEntries(SKILL_KEYS.map((k) => [k, levelInfo(totals.bySkill[k])])) as Record<Skill, LevelInfo>;
-    const streak = streakInfo((d) => dayPct(snap, d, waterGoalOn(d)), today);
+    const streak = streakInfo((d) => dayResult(snap, d, waterGoalOn(d)), today);
     const rec = snap.days.get(today);
     const prog = rec
       ? dayProgress({ lists: rec.lists, done: snap.done, habits: snap.habits.get(today) ?? {}, water: snap.water.get(today) ?? 0, waterGoalMl: waterGoalOn(today), date: today })
-      : { done: 0, total: 1 };
+      : { done: 0, total: 1, rest: false };
     return {
       level: levelInfo(totals.total),
       skills,
       streak,
-      ticksLeft: ticksToCount(prog.done, prog.total),
+      ticksLeft: prog.rest ? 0 : ticksToCount(prog.done, prog.total),
+      rest: prog.rest,
       xpToday: totals.byDate.get(today) ?? 0,
       settled: xpMissing.length === 0,
     };
@@ -515,8 +516,10 @@ export interface Game {
   level: LevelInfo;
   skills: Record<Skill, LevelInfo>;
   streak: StreakInfo;
-  /** Ticks still needed today for it to count towards the streak. */
+  /** Ticks still needed today for it to count towards the streak (0 on a rest day). */
   ticksLeft: number;
+  /** Today is a rest day: skipped by the streak. */
+  rest: boolean;
   xpToday: number;
   /** All earned XP is saved (so a level-up shown now is real). */
   settled: boolean;

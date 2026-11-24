@@ -89,7 +89,7 @@ export function LevelCard({ game }: { game: Game }) {
 }
 
 export function Kingdom({ game, fallback }: { game: Game; fallback: string }) {
-  const line = kingdomLine({ level: game.level, streak: game.streak, ticksLeft: game.ticksLeft, fallback });
+  const line = kingdomLine({ level: game.level, rest: game.rest, streak: game.streak, ticksLeft: game.ticksLeft, fallback });
   return (
     <>
       <LevelCard game={game} />

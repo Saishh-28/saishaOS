@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  dayPct,
+  dayResult,
   earnedXp,
   GameData,
   kingdomLine,
@@ -13,7 +13,7 @@ import {
   XpEvent,
   xpTotals,
 } from "./game";
-import { PlanTask } from "./logic";
+import { dayProgress, PlanTask, REST_DAY_KEY, restDaysLeft } from "./logic";
 
 const task = (id: string, block: "deep" | "study"): PlanTask => ({ id, block, text: id, phaseStart: "2026-11-19", sortOrder: 0, isCustom: false, isAi: false });
 
@@ -129,10 +129,12 @@ describe("levels", () => {
 });
 
 describe("streaks that forgive", () => {
-  const run = (pcts: number[], start = "2026-11-19") => {
-    const dates = pcts.map((_, i) => new Date(Date.parse(start) + i * 864e5).toISOString().slice(0, 10));
-    const by = new Map(dates.map((d, i) => [d, pcts[i]]));
-    return streakInfo((d) => by.get(d) ?? 0, dates.at(-1)!, start);
+  // A number is a working day's %; "rest" is a rest day. Dates run from 2 Nov 2026 (a Monday);
+  // the test days here are just a sequence, so Sundays aren't special in this helper.
+  const run = (days: (number | "rest")[], start = "2026-11-02") => {
+    const dates = days.map((_, i) => new Date(Date.parse(start) + i * 864e5).toISOString().slice(0, 10));
+    const by = new Map(dates.map((d, i) => [d, days[i]]));
+    return streakInfo((d) => (by.get(d) === "rest" ? { pct: 0, rest: true } : { pct: (by.get(d) as number) ?? 0, rest: false }), dates.at(-1)!, start);
   };
 
   it("a day counts at ≥ 60%", () => {
@@ -156,16 +158,60 @@ describe("streaks that forgive", () => {
     const s = run([80, 80, 0, 20]);
     expect(s.current).toBe(2);
     expect(s.atRisk).toBe(true);
-    expect(s.marks.has("2026-11-22")).toBe(false);
+    expect(s.marks.has("2026-11-05")).toBe(false);
   });
 
-  it("a day's % comes from its list, habits and water; days with no list are 0%", () => {
+  it("rest days are skipped: they neither break nor extend the streak", () => {
+    expect(run([80, 80, "rest", 80]).current).toBe(3);
+    expect(run([80, 80, "rest", "rest", "rest", 80]).current).toBe(3);
+    // a miss, a rest day, then another miss: still two misses in a row
+    expect(run([80, 80, 10, "rest", 10, 80]).current).toBe(1);
+    // forgiven miss, then a rest day: today is still at risk
+    expect(run([80, 80, 10, "rest", 20]).atRisk).toBe(true);
+    // 7 good days with rest days in between still earn a shield
+    expect(run([80, 80, 80, "rest", 80, 80, 80, 80]).shields).toBe(1);
+    // today as a rest day: marked rest, never a miss, not at risk
+    const t = run([80, 10, "rest"]);
+    expect([...t.marks.values()]).toEqual(["good", "grace", "rest"]);
+    expect(t.atRisk).toBe(false);
+  });
+
+  it("your real start (19–24 Nov): Sunday 22 Nov rest, Monday at 59% forgiven, streak 3", () => {
+    const s = run([100, 95, 77, "rest", 59, 0], "2026-11-19");
+    expect(s.current).toBe(3);
+    expect([...s.marks.entries()]).toEqual([
+      ["2026-11-19", "good"],
+      ["2026-11-20", "good"],
+      ["2026-11-21", "good"],
+      ["2026-11-22", "rest"],
+      ["2026-11-23", "grace"],
+    ]);
+    expect(s.atRisk).toBe(true);
+  });
+
+  it("rest-day %: only skincare, the after-meal walks and water; Sundays automatically", () => {
+    const lists = { deep: [{ taskId: "deep-1", carriedOver: false }], study: [] };
+    const habits = { [REST_DAY_KEY]: true, skinAM: true, walkLunch: true, steps: true, gym: true };
+    expect(dayProgress({ lists, done: new Map(), habits, water: 1300, waterGoalMl: 1250, date: "2026-11-24" })).toEqual({ done: 3, total: 5, pct: 60, rest: true });
+    expect(dayProgress({ lists, done: new Map(), habits: {}, water: 0, date: "2026-11-29" }).rest).toBe(true);
+    expect(dayProgress({ lists, done: new Map(), habits: {}, water: 0, date: "2026-11-28" }).rest).toBe(false);
+  });
+
+  it("at most 2 rest / sick days a week (Mon–Sun); Sundays don't use them", () => {
+    const h = new Map([["2026-11-23", { [REST_DAY_KEY]: true }], ["2026-11-29", { [REST_DAY_KEY]: true }]]);
+    expect(restDaysLeft(h, "2026-11-25")).toBe(1);
+    expect(restDaysLeft(new Map([...h, ["2026-11-26", { [REST_DAY_KEY]: true }]]), "2026-11-28")).toBe(0);
+    expect(restDaysLeft(new Map([...h, ["2026-11-26", { [REST_DAY_KEY]: true }]]), "2026-11-30")).toBe(2);
+  });
+
+  it("a day's % comes from its list, habits and water; working days with no list are 0%, rest days are rest", () => {
     const d = data({
       done: new Map([["deep-1", "2026-11-24"]]),
       days: new Map([["2026-11-24", { lists: { deep: [{ taskId: "deep-1", carriedOver: false }], study: [] }, fromAi: false }]]),
     });
-    expect(dayPct(d, "2026-11-24", 1250)).toBe(8); // 1 of 13 (1 task + 11 habits + water)
-    expect(dayPct(d, "2026-11-23", 1250)).toBe(0);
+    expect(dayResult(d, "2026-11-24", 1250)).toEqual({ pct: 8, rest: false }); // 1 of 13 (1 task + 11 habits + water)
+    expect(dayResult(d, "2026-11-23", 1250)).toEqual({ pct: 0, rest: false });
+    expect(dayResult(d, "2026-11-22", 1250)).toEqual({ pct: 0, rest: true });
     expect(ticksToCount(1, 13)).toBe(7);
     expect(ticksToCount(9, 13)).toBe(0);
   });
@@ -173,6 +219,10 @@ describe("streaks that forgive", () => {
 
 describe("Lumi on the kingdom", () => {
   const streak = { current: 4, best: 4, shields: 0, marks: new Map(), atRisk: false };
+  it("on a rest day: rest is enough", () => {
+    expect(kingdomLine({ level: levelInfo(280), rest: true, streak: { ...streak, atRisk: true }, ticksLeft: 0, fallback: "x" })).toMatch(/^Rest day/);
+  });
+
   it("warns gently when the streak is at risk, then cheers near a level, else the usual line", () => {
     expect(kingdomLine({ level: levelInfo(150), streak: { ...streak, atRisk: true }, ticksLeft: 2, fallback: "x" })).toMatch(/2 more ticks today keeps your 4-day streak/);
     expect(kingdomLine({ level: levelInfo(280), streak, ticksLeft: 5, fallback: "x" })).toMatch(/Only 20 XP until Level 3/);

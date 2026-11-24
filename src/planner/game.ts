@@ -227,7 +227,7 @@ export const STREAK_DAY_PCT = 60;
 export const SHIELD_EVERY = 7;
 export const MAX_SHIELDS = 3;
 
-export type DayMark = "good" | "grace" | "shield" | "miss";
+export type DayMark = "good" | "grace" | "shield" | "miss" | "rest";
 
 export interface StreakInfo {
   /** Good days in the current streak. */
@@ -236,24 +236,36 @@ export interface StreakInfo {
   shields: number;
   /** How each finished day (and today, once it counts) went. */
   marks: Map<string, DayMark>;
-  /** Yesterday was the one forgiven miss: missing today too would break the streak (unless a shield saves it). */
+  /** The last non-rest day was the one forgiven miss: missing today too would break the streak (unless a shield saves it). */
   atRisk: boolean;
 }
 
+export interface DayResult {
+  pct: number;
+  rest: boolean;
+}
+
 /**
- * Walk the days from GAME_START. A day is good at ≥ 60%. One missed day is
- * forgiven; a second miss in a row uses a shield if there is one, otherwise
- * the streak breaks. Every 7 good days in a streak earn a shield (max 3).
- * Today only counts once it is good (it can't be a miss until it's over).
+ * Walk the days from GAME_START. Rest days (Sundays, rest / sick days) are
+ * skipped: they neither break nor extend the streak. Otherwise a day is good
+ * at >= 60%. One missed day is forgiven; a second miss in a row (rest days in
+ * between don't count) uses a shield if there is one, otherwise the streak
+ * breaks. Every 7 good days in a streak earn a shield (max 3).
+ * Today only counts once it is good or rest (it can't be a miss until it's over).
  */
-export function streakInfo(pctOn: (date: string) => number, today: string, start = GAME_START): StreakInfo {
+export function streakInfo(dayOn: (date: string) => DayResult, today: string, start = GAME_START): StreakInfo {
   const marks = new Map<string, DayMark>();
   let current = 0;
   let best = 0;
   let shields = 0;
   let missRun = 0;
   for (let d = start; d <= today; d = addDays(d, 1)) {
-    const good = pctOn(d) >= STREAK_DAY_PCT;
+    const day = dayOn(d);
+    if (day.rest) {
+      marks.set(d, "rest");
+      continue;
+    }
+    const good = day.pct >= STREAK_DAY_PCT;
     if (d === today && !good) break;
     if (good) {
       current++;
@@ -273,15 +285,18 @@ export function streakInfo(pctOn: (date: string) => number, today: string, start
     }
     best = Math.max(best, current);
   }
-  const yesterday = addDays(today, -1);
-  return { current, best, shields, marks, atRisk: marks.get(yesterday) === "grace" && !marks.has(today) };
+  let last = addDays(today, -1);
+  while (marks.get(last) === "rest") last = addDays(last, -1);
+  return { current, best, shields, marks, atRisk: marks.get(last) === "grace" && !marks.has(today) };
 }
 
-/** A day's % for the streak, from the planner data (days without a list count as 0%). */
-export function dayPct(d: GameData, date: string, waterGoalMl: number): number {
+/** A day's % and whether it's a rest day, from the planner data (a working day without a list counts as 0%). */
+export function dayResult(d: GameData, date: string, waterGoalMl: number): DayResult {
   const rec = d.days.get(date);
-  if (!rec) return 0;
-  return dayProgress({ lists: rec.lists, done: d.done, habits: d.habits.get(date) ?? {}, water: d.water.get(date) ?? 0, waterGoalMl, date }).pct;
+  const habits = d.habits.get(date) ?? {};
+  const lists = rec?.lists ?? { deep: [], study: [] };
+  const p = dayProgress({ lists, done: d.done, habits, water: d.water.get(date) ?? 0, waterGoalMl, date });
+  return { pct: rec || p.rest ? p.pct : 0, rest: p.rest };
 }
 
 /** Ticks still needed today for it to count (0 when it already does). */
@@ -295,6 +310,8 @@ export function ticksToCount(done: number, total: number): number {
 
 export function kingdomLine(args: {
   level: LevelInfo;
+  /** Today is a rest day (Sunday, or marked rest / sick). */
+  rest?: boolean;
   streak: StreakInfo;
   ticksLeft: number;
   /** Lumi's usual line for this time of day (screens.tsx). */
@@ -302,6 +319,7 @@ export function kingdomLine(args: {
 }): string {
   const { level, streak, ticksLeft } = args;
   const toNext = level.needed - level.into;
+  if (args.rest) return "Rest day. Water, skincare and two short walks are plenty. Your streak is safe.";
   if (streak.atRisk && ticksLeft > 0)
     return `Yesterday slipped, and that's okay. ${ticksLeft} more tick${ticksLeft > 1 ? "s" : ""} today keeps your ${streak.current}-day streak glowing.`;
   if (toNext <= 30) return `Only ${toNext} XP until Level ${level.level + 1}. The kingdom is holding its breath ✨`;
