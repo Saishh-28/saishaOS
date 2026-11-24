@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Block, SCHEDULE } from "./plan";
+import { Kingdom } from "./kingdom";
 import { ANCHORS, anchorMl, daysAtGoalThisWeek, DRINKS, GLASS_ML, litres, waterMilestone } from "./water";
 import {
   addDays,
@@ -114,17 +115,22 @@ export function TodayScreen({ p, today, minutes, toast }: ScreenProps) {
   const hdone = hs.filter((h) => habits[h.key]).length;
   const tasksLeft = [...p.lists.deep, ...p.lists.study].filter((i) => !snap.done.has(i.taskId)).length;
   const text = (id?: string) => (id ? p.tasksById.get(id)?.text ?? "(removed task)" : "");
+  const line = lumiLine({ pct: prog.pct, tasksLeft, habitsLeft: hs.length - hdone, minutes, gym, gymDone: !!habits.gym });
 
   return (
     <>
-      <div className="lumi-row">
-        <div className="lumi-float">
-          <Lumi size={64} label="Lumi, your star spirit" />
+      {p.game ? (
+        <Kingdom game={p.game} fallback={line} />
+      ) : (
+        <div className="lumi-row">
+          <div className="lumi-float">
+            <Lumi size={64} label="Lumi, your star spirit" />
+          </div>
+          <div className="bubble" role="status">
+            {line}
+          </div>
         </div>
-        <div className="bubble" role="status">
-          {lumiLine({ pct: prog.pct, tasksLeft, habitsLeft: hs.length - hdone, minutes, gym, gymDone: !!habits.gym })}
-        </div>
-      </div>
+      )}
       <div className="card">
         <h2>
           Today's progress <span className="sub">{prog.pct}%</span>

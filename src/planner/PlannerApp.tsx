@@ -26,10 +26,11 @@ import {
   TreasuryScreen,
 } from "./more";
 import { BUCKET_IMPORTED_FLAG, bucketItemsToImport, OLD_BUCKET_KEY, parseCurrency, showCurrencyReminder } from "./records";
+import { LevelUpOverlay } from "./kingdom";
 import "./planner.css";
 
 const NAV: { v: PlannerView; label: string }[] = [
-  { v: "today", label: "Today" },
+  { v: "today", label: "Home" },
   { v: "deep", label: "Deep" },
   { v: "study", label: "Study" },
   { v: "gym", label: "Gym" },
@@ -41,7 +42,7 @@ const NAV: { v: PlannerView; label: string }[] = [
 const UNDER_MORE: PlannerView[] = ["more", "review", "settings", "care", "lumi", "music", "treasury"];
 
 const TITLES: Record<PlannerView, string> = {
-  today: "Today",
+  today: "Home",
   deep: "Deep work",
   study: "Course prep",
   gym: "Gym",
@@ -229,6 +230,9 @@ export default function PlannerApp() {
     !!p.snap &&
     showCurrencyReminder(today, parseCurrency(p.settings.currency), p.settings.currency_reminder_dismissed === true);
   const loaded = !!p.snap && !!p.day;
+  // Celebrate a new player level once (on any phone): remembered in user_settings.
+  const seenLevel = typeof p.settings.game_seen_level === "number" ? (p.settings.game_seen_level as number) : 1;
+  const levelUp = loaded && p.game?.settled && p.game.level.level > seenLevel ? p.game.level : null;
 
   return (
     <MotionConfig reducedMotion="user">
@@ -333,6 +337,14 @@ export default function PlannerApp() {
           </Link>
         ))}
       </nav>
+      {levelUp && (
+        <LevelUpOverlay
+          level={levelUp.level}
+          title={levelUp.title}
+          xp={levelUp.xp}
+          onClose={() => p.setSetting("game_seen_level", levelUp.level)}
+        />
+      )}
       <div className={"toast" + (toastOn ? " on" : "")} role="status" aria-live="polite">
         {toastMsg}
       </div>
