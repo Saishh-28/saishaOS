@@ -90,6 +90,8 @@ export interface GameData {
   german?: readonly GermanLesson[];
   /** Boss battles (Phase 2b). */
   bosses?: readonly Boss[];
+  /** The Monday Strength Level 2 was reached (Phase 2c), for the boss battle. */
+  strengthL2On?: string | null;
 }
 
 const inRange = (date: string, today: string) => date >= GAME_START && date <= today;

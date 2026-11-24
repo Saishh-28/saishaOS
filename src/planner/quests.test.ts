@@ -96,7 +96,14 @@ describe("quests", () => {
     const ca = SEED_BOSSES[0];
     expect(bossState({ ...ca, progress: 4 }, [])).toEqual({ progress: 4, beatenOn: null });
     expect(bossState({ ...ca, progress: 10, doneOn: "2026-12-20" }, [])).toEqual({ progress: 10, beatenOn: "2026-12-20" });
-    expect(bossState(SEED_BOSSES[1], [])).toEqual({ progress: 0, beatenOn: null }); // Strength levels: Phase 2c
+    expect(bossState(SEED_BOSSES[1], [])).toEqual({ progress: 0, beatenOn: null });
+  });
+
+  it("Unlock Strength Level 2: beaten (+200 XP) the Monday you reach it", () => {
+    const boss = SEED_BOSSES.find((b) => b.id === "boss-strength-2")!;
+    expect(bossState(boss, [], "2026-12-21")).toEqual({ progress: 1, beatenOn: "2026-12-21" });
+    const e = earnedXp(data({ bosses: [boss], strengthL2On: "2026-12-21" }), "2026-12-21", goal);
+    expect(e.find((x) => x.source === "boss:boss-strength-2")).toMatchObject({ amount: 200, skill: "body", date: "2026-12-21" });
   });
 
   it("removing a lesson takes its XP back with a minus row", () => {
