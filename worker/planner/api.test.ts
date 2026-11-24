@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from "vitest";
 import { buildPlanTasks } from "../../src/planner/logic";
 import { DEFAULT_PLAN_NOTE, handlePlannerApi, HttpError, PlannerDeps, REVIEW_SYSTEM, ReviewData, SaveRequest } from "./api";
 
-const TODAY = "2026-11-24";
+// A day before the new study plan (24 Nov), so these tests cover the old study queue.
+// The new plan has its own tests in study.test.ts and below.
+const TODAY = "2026-11-22";
 const PLAN = buildPlanTasks();
 
 function data(): ReviewData {
@@ -80,7 +82,7 @@ describe("POST /api/planner/review", () => {
     );
     const r = await call(deps, "/api/planner/review", { date: TODAY, notes: "Call the CA" });
     expect(r.status).toBe(200);
-    expect(r.body.tomorrow).toBe("2026-11-25");
+    expect(r.body.tomorrow).toBe("2026-11-23");
     expect(r.body.plan.lists.deep).toEqual([{ id: "deep-2026-11-23-1", text: "GST: learn what a GSTIN is + registration basics" }]);
     expect(r.body.plan.lists.study.map((t: any) => t.id)).toEqual(["study-2026-11-23-0", "study-2026-11-23-1"]);
     expect(r.body.plan.newTasks).toEqual([{ block: "deep", text: "Call Sharma & Co CA", reason: "From notes" }]);
@@ -129,14 +131,14 @@ describe("POST /api/planner/review/approve", () => {
     expect(r.body.rejected.map((x: any) => x.item)).toEqual(["injected-fake-id", "deep-2026-11-23-0"]);
     expect(saved).toHaveLength(1);
     const req = saved[0];
-    expect(req.date).toBe("2026-11-25");
+    expect(req.date).toBe("2026-11-23");
     expect(req.lists.deep).toEqual([{ taskId: "deep-2026-11-23-1", carriedOver: true }]);
     expect(req.lists.study).toEqual([
       { taskId: "study-2026-11-23-0", carriedOver: true },
-      { taskId: "ai-2026-11-25-0-r4nd", carriedOver: false },
+      { taskId: "ai-2026-11-23-0-r4nd", carriedOver: false },
     ]);
     expect(req.newTasks).toEqual([
-      expect.objectContaining({ id: "ai-2026-11-25-0-r4nd", block: "study", text: "Email the tutor coordinator", isAi: true, isCustom: true }),
+      expect.objectContaining({ id: "ai-2026-11-23-0-r4nd", block: "study", text: "Email the tutor coordinator", isAi: true, isCustom: true }),
     ]);
   });
 

@@ -12,6 +12,8 @@
  * Everything dropped is reported back with a reason.
  */
 import { AI_MAX_PER_BLOCK, BLOCKS, Block } from "./plan";
+import { isLegacyStudyId, STUDY_PLAN_START, trackOf } from "./study";
+import { studyTrackFor, usesStudyTracks } from "./logic";
 import type { Completions, PlanTask } from "./logic";
 
 export interface AcceptedTask {
@@ -113,6 +115,10 @@ export function validateAiPlan(raw: unknown, ctx: ValidationContext): ValidatedP
         out.rejected.push({ item: id, reason: `Belongs to ${t.block}, not ${b}` });
       } else if (ctx.done.has(id)) {
         out.rejected.push({ item: id, reason: `Already done on ${ctx.done.get(id)}` });
+      } else if (b === "study" && ctx.planDate && usesStudyTracks(ctx.planDate) && isLegacyStudyId(id)) {
+        out.rejected.push({ item: id, reason: `Old study plan task (replaced on ${STUDY_PLAN_START})` });
+      } else if (b === "study" && ctx.planDate && trackOf(id) && trackOf(id) !== studyTrackFor(ctx.planDate)) {
+        out.rejected.push({ item: id, reason: `Not ${ctx.planDate}'s study track` });
       } else if (seen.has(id)) {
         out.rejected.push({ item: id, reason: "Duplicate" });
       } else {

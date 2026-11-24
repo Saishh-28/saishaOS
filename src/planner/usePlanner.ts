@@ -14,8 +14,9 @@ import {
   PlanTask,
   previousDate,
   pullNext,
-  queueFor,
+  queueForDate,
   removeFromDay,
+  upgradeStudyItems,
 } from "./logic";
 import { DayRecord, PlannerStore, Snapshot } from "./store";
 
@@ -163,6 +164,24 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     );
   }, [store, snap, loadedOn, today, mutate]);
 
+  // One-time switch to the new study plan for a day created with the old one.
+  useEffect(() => {
+    const d = snap?.days.get(today);
+    if (!store || !snap || !d || loadedOn !== today || creating.current.has("study:" + today)) return;
+    const next = upgradeStudyItems(d.lists.study, snap.tasks, today, snap.done);
+    if (!next) return;
+    creating.current.add("study:" + today);
+    const removed = d.lists.study.filter((i) => !next.some((x) => x.taskId === i.taskId));
+    const added = next.filter((i) => !d.lists.study.some((x) => x.taskId === i.taskId));
+    mutate(
+      (s) => withDay(s, today, (x) => ({ ...x, lists: { ...x.lists, study: next } })),
+      async () => {
+        for (const i of removed) await store.removeItem(today, i.taskId);
+        for (const i of added) await store.addItem(today, "study", i, next.indexOf(i));
+      },
+    );
+  }, [store, snap, loadedOn, today, mutate]);
+
   const day: DayRecord | undefined = snap?.days.get(today);
   const tasksById = new Map<string, PlanTask>((snap?.tasks ?? []).map((t) => [t.id, t] as const));
 
@@ -229,7 +248,7 @@ export function usePlanner(store: PlannerStore | null, today: string) {
 
   const pull = (block: Block): { added: PlanTask | null; early: boolean } => {
     if (!store || !snap || !day) return { added: null, early: false };
-    const r = pullNext(day.lists[block], queueFor(snap.tasks, block), today, snap.done);
+    const r = pullNext(day.lists[block], queueForDate(snap.tasks, block, today), today, snap.done);
     if (r.added) {
       const item = r.items[r.items.length - 1];
       mutate(

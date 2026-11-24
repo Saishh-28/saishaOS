@@ -23,7 +23,7 @@ Data syncs to Supabase when you're signed in, and falls back to `localStorage` w
 - **Backend:** one Cloudflare Worker ([`worker.ts`](worker.ts)) that serves the static build and the `/api/*` routes
 - **Database and auth:** Supabase (Postgres with Row Level Security on every table; Google and email sign-in)
 - **AI:** Google Gemini via `@google/genai`, called only from the Worker
-- **Tests:** Vitest (123 tests)
+- **Tests:** Vitest (135 tests)
 
 ## Project structure
 
@@ -37,6 +37,7 @@ src/planner/                   Daily Planner
   gym.ts                       Gym sessions by weekday, yoga timer, weights, India time
   workouts.ts                  Exercise catalogue, swaps, your own Day A / B (just today or always)
   water.ts                     Water in ml: bottle, anchors, other drinks, gradual weekly goal
+  study.ts                     Study plan from 24 Nov 2026: R, JS → TS → React and Saturday tracks
   more.tsx, records.ts, db.ts  Screens moved from the old dashboard: courses, career, Care, Music Room, Treasury, Lumi, About me, backup
 worker/lumi/                   Lumi chat API (POST /api/lumi/chat)
   sound.ts                     Sounds (Web Audio) and vibration, with settings
@@ -131,6 +132,7 @@ Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at 
 ### How the lists work
 
 - **First time a day is opened:** unfinished tasks from the most recent previous day are carried over (marked "↻ from yesterday"). The list is then filled from the plan queue, in order, up to 5 tasks. Only tasks whose phase has started and that aren't done are used.
+- **Course prep (from 24 Nov 2026):** one task per session, by weekday: Mon/Wed/Fri the next R task (r4ds 2nd edition + Quarto), Tue/Thu the next JavaScript → TypeScript → React task, Saturday light review or German (DW A1, alternating), Sunday rest. Each day gets the first unfinished task of its track, so a missed Monday task comes back on Wednesday. Your own study tasks still carry over. The old study queue's tasks stay in the database as history; unfinished ones were taken off today's list when the new plan started.
 - **Your own actions:** tick a task done, remove it from today (plan tasks go back into the queue; your own tasks are deleted), add your own task, or **pull the next task** (from a future phase if the current one is empty).
 - **Habits:** water and skincare AM/PM share Sanctuary's `health_logs` rows, so both screens always show the same value. The other habits and gym ticks use `habit_logs`.
 - **Water (no reminders):** tracked in ml (`health_logs` metric `water_ml`). One tap for "Finished a bottle" (bottle size in Settings), "+250 ml glass", or other drinks (chaas, coconut water, nimbu pani, herbal tea, soup). **Water anchors** on Today tie a glass to things you already do (after waking, before meals, refill at each deep-work block, after the walk with Dad); each ticked anchor adds 250 ml unless its "from my bottle" toggle is on. The goal starts at 1.25 L and rises 0.25 L after every week with 5 days at the goal, up to 2 L. The Moonlit Garden fountain fills up; reaching the goal plays a sparkle. Missed days are never mentioned.
