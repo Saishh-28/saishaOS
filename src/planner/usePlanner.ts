@@ -15,6 +15,7 @@ import {
   weeklyQuest,
   WeeklyQuest,
 } from "./quests";
+import { CareStep, HairLog, Routine, ROUTINE_HABIT, routineDone, SEED_STEPS, SkinLog } from "./care";
 import { MealAte, MealLog, MealPlanRow, MealSlot, SEED_MEAL_PLAN } from "./meals";
 import { isComebackWeek, parseStoredLevels, StoredLevels, trackLevel, TrackLevel, withStored } from "./training";
 import { dayResult, earnedXp, levelInfo, LevelInfo, reconcileXp, Skill, SKILL_KEYS, streakInfo, StreakInfo, ticksToCount, xpTotals } from "./game";
@@ -60,6 +61,12 @@ function cloneSnap(s: Snapshot): Snapshot {
     mealPlan: [...s.mealPlan],
     meals: [...s.meals],
     mealsReady: s.mealsReady,
+    careSteps: [...s.careSteps],
+    skin: [...s.skin],
+    hair: [...s.hair],
+    journalDates: [...s.journalDates],
+    bookNotes: [...s.bookNotes],
+    careReady: s.careReady,
   };
 }
 
@@ -517,6 +524,26 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     );
   }, [store, snap, loadedOn, today, mutate]);
 
+  // First run with the Phase 2.5 tables: add your skincare steps once.
+  useEffect(() => {
+    if (!store || !snap || !snap.careReady || loadedOn !== today) return;
+    if (snap.settings.care_steps_seeded === true || creating.current.has("care-seed")) return;
+    creating.current.add("care-seed");
+    const steps = snap.careSteps.length ? [] : SEED_STEPS;
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.careSteps = [...n.careSteps, ...steps];
+        n.settings.care_steps_seeded = true;
+        return n;
+      },
+      async () => {
+        await store.seedCareSteps(steps);
+        await store.setSetting("care_steps_seeded", true);
+      },
+    );
+  }, [store, snap, loadedOn, today, mutate]);
+
   // First run with the Phase 3b tables: add your meal plan once.
   useEffect(() => {
     if (!store || !snap || !snap.mealsReady || loadedOn !== today) return;
@@ -572,6 +599,80 @@ export function usePlanner(store: PlannerStore | null, today: string) {
         : null,
     };
   }, [snap, today, waterGoalOn, xpMissing, strengthL2On]);
+
+  /* ------------------------------ care ------------------------------ */
+
+  const emptySkin = (date: string): SkinLog => ({ date, steps: [], rating: null, areas: [], note: null });
+
+  /** Save today's skin log (steps, rating, areas, note). */
+  const saveSkin = (patch: Partial<SkinLog>) => {
+    if (!store || !snapRef.current) return;
+    const cur = snapRef.current.skin.find((l) => l.date === today) ?? emptySkin(today);
+    const next: SkinLog = { ...cur, ...patch, date: today, note: (patch.note !== undefined ? patch.note : cur.note)?.slice(0, 500) || null };
+    return mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.skin = [...n.skin.filter((l) => l.date !== today), next];
+        return n;
+      },
+      () => store.setSkinLog(next),
+    );
+  };
+
+  /**
+   * Tick a routine step. When every everyday step of the routine is ticked,
+   * the Skincare AM / PM habit is ticked too (and unticked if you untick one),
+   * so Habits, Sanctuary and Care always agree.
+   */
+  const tickCareStep = (routine: Routine, stepId: string, on: boolean) => {
+    if (!store || !snapRef.current) return;
+    const cur = snapRef.current;
+    const log = cur.skin.find((l) => l.date === today) ?? emptySkin(today);
+    const steps = on ? [...new Set([...log.steps, stepId])] : log.steps.filter((x) => x !== stepId);
+    const was = routineDone(cur.careSteps, routine, log.steps);
+    const now = routineDone(cur.careSteps, routine, steps);
+    const habit = ROUTINE_HABIT[routine];
+    const ticked = !!cur.habits.get(today)?.[habit];
+    saveSkin({ steps });
+    if (now && !ticked) setHabit(habit, true);
+    else if (!now && was && ticked) setHabit(habit, false);
+    return now && !was;
+  };
+
+  const saveCareStep = (step: CareStep) =>
+    store &&
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.careSteps = [...n.careSteps.filter((x) => x.id !== step.id), step];
+        return n;
+      },
+      () => store.setCareStep(step),
+    );
+
+  const deleteCareStep = (id: string) =>
+    store &&
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.careSteps = n.careSteps.filter((x) => x.id !== id);
+        return n;
+      },
+      () => store.deleteCareStep(id),
+    );
+
+  /** Save (or with null, delete) a wash day. */
+  const saveHair = (date: string, log: HairLog | null) =>
+    store &&
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.hair = n.hair.filter((l) => l.date !== date);
+        if (log) n.hair.push(log);
+        return n;
+      },
+      () => store.setHairLog(date, log),
+    );
 
   /* ----------------------------- meals ----------------------------- */
 
@@ -742,6 +843,11 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     training,
     setMeal,
     saveMealPlanRow,
+    saveSkin,
+    tickCareStep,
+    saveCareStep,
+    deleteCareStep,
+    saveHair,
     setGermanLesson,
     saveBoss,
     deleteBoss,
