@@ -30,6 +30,7 @@ import { LevelUpOverlay } from "./kingdom";
 import type { TrackLevel } from "./training";
 import { QuestsScreen, RewardsScreen } from "./questScreens";
 import { CalendarScreen } from "./calendarScreen";
+import { MealsScreen } from "./mealsScreen";
 import "./planner.css";
 
 const NAV: { v: PlannerView; label: string }[] = [
@@ -42,7 +43,7 @@ const NAV: { v: PlannerView; label: string }[] = [
 ];
 
 /** Screens reached from the More tab (it stays highlighted on them). */
-const UNDER_MORE: PlannerView[] = ["more", "review", "settings", "care", "lumi", "music", "treasury", "rewards", "calendar"];
+const UNDER_MORE: PlannerView[] = ["more", "review", "settings", "care", "lumi", "music", "treasury", "rewards", "calendar", "meals"];
 
 const TITLES: Record<PlannerView, string> = {
   today: "Home",
@@ -60,6 +61,7 @@ const TITLES: Record<PlannerView, string> = {
   quests: "Quests",
   rewards: "Rewards",
   calendar: "Calendar",
+  meals: "Meals",
 };
 
 /** Dev only: /planner?date=2026-11-23 pretends today is that date (for testing gym days, rollover, etc.). */
@@ -340,6 +342,8 @@ export default function PlannerApp() {
           <TreasuryScreen {...more} />
         ) : view === "quests" ? (
           <QuestsScreen {...props} />
+        ) : view === "meals" ? (
+          <MealsScreen {...props} />
         ) : view === "calendar" ? (
           <CalendarScreen p={p} today={today} />
         ) : view === "rewards" ? (

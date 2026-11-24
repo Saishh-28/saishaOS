@@ -1974,3 +1974,105 @@ body:has(.planner) {
     animation: none;
   }
 }
+
+/* Phase 3b: Meals */
+.planner .rule-chips {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.planner .rule-chips li {
+  padding: 4px 10px;
+  border-radius: 99px;
+  background: rgba(255, 208, 222, 0.16);
+  color: #ffe4ec;
+  font-size: 12px;
+  font-weight: 800;
+}
+.planner ul.meals {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.planner .meal {
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--glass);
+  border: 1px solid var(--line);
+}
+.planner .meal.done {
+  border-color: rgba(255, 196, 216, 0.5);
+}
+.planner .meal-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.planner .meal-btns {
+  gap: 8px;
+  margin-top: 8px;
+}
+.planner .meal-btns .btn {
+  flex: 1;
+  min-height: var(--tap);
+}
+.planner .meal input[type="text"] {
+  margin-top: 8px;
+  width: 100%;
+}
+.planner .wd-tabs {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 10px;
+}
+.planner .wd-tab {
+  min-height: var(--tap);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+.planner .wd-tab.on {
+  background: rgba(255, 217, 138, 0.2);
+  border-color: #ffd98a;
+  color: #ffe7b3;
+}
+.planner .meal-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.planner .meal-table th {
+  text-align: left;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--muted);
+  padding: 6px 8px 6px 0;
+  vertical-align: top;
+  width: 76px;
+}
+.planner .meal-table td {
+  padding: 4px 0;
+}
+.planner .meal-table textarea {
+  width: 100%;
+  min-height: var(--tap);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--well);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  resize: vertical;
+}

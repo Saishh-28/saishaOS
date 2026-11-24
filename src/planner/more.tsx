@@ -59,6 +59,7 @@ const sure = (what: string) => window.confirm(`Delete ${what}? This can't be und
 /* ------------------------------------------------------------------ */
 
 const MORE: { to: string; title: string; sub: string }[] = [
+  { to: "/planner/meals", title: "Meals · Moonlit Garden", sub: "Today's eggetarian meals, your meal plan" },
   { to: "/planner/calendar", title: "Calendar", sub: "Your 13-week journey, day by day" },
   { to: "/planner/quests", title: "Quests", sub: "Daily, weekly, Nicos Weg German, boss battles" },
   { to: "/planner/rewards", title: "Rewards", sub: "Coins, your reward list, dreams" },
