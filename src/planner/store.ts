@@ -12,6 +12,7 @@ import { parsePlanItems, PlanItem, planKey, PlanScope } from "./workouts";
 import { glassesToMl } from "./water";
 import type { WorkoutDay } from "./plan";
 import { isSkill, XpEvent } from "./game";
+import { Boss, GermanLesson, Reward, RewardClaim, Tier, TIERS } from "./quests";
 
 export interface DayRecord {
   lists: DayLists;
@@ -31,6 +32,12 @@ export interface Snapshot {
   xp: XpEvent[]; // xp_events, oldest first (empty before the Phase 2 migration)
   /** False until the xp_events table exists (so the game stays hidden instead of writing). */
   xpReady: boolean;
+  bosses: Boss[];
+  rewards: Reward[];
+  claims: RewardClaim[];
+  german: GermanLesson[];
+  /** False until the Phase 2b tables exist (quests and rewards stay hidden). */
+  questsReady: boolean;
 }
 
 export interface PlannerStore {
@@ -57,6 +64,16 @@ export interface PlannerStore {
   setNotes(date: string, notes: string | null): Promise<void>;
   /** Add XP rows (never changes or removes any). Rows with a key that already exists are skipped. */
   addXpEvents(events: XpEvent[]): Promise<void>;
+  /** Insert bosses / rewards you don't have yet (first run). Never overwrites. */
+  seedQuests(bosses: Boss[], rewards: Reward[]): Promise<void>;
+  setBoss(boss: Boss): Promise<void>;
+  deleteBoss(id: string): Promise<void>;
+  setReward(reward: Reward): Promise<void>;
+  deleteReward(id: string): Promise<void>;
+  /** Spend coins on a reward (add-only). */
+  addClaim(claim: RewardClaim): Promise<void>;
+  /** Save a Nicos Weg lesson as done, or with null, remove it. */
+  setGermanLesson(lesson: number, row: GermanLesson | null): Promise<void>;
   importBackup(plan: ImportPlan): Promise<void>;
   /** Live sync: call `onChange` when another device changes this user's data. Returns unsubscribe. */
   subscribe?(onChange: () => void): () => void;
@@ -74,6 +91,10 @@ export const LIVE_TABLES = [
   "workout_plans",
   "user_settings",
   "xp_events",
+  "boss_battles",
+  "rewards",
+  "reward_claims",
+  "german_lessons",
 ] as const;
 
 export const emptySnapshot = (): Snapshot => ({
@@ -87,7 +108,14 @@ export const emptySnapshot = (): Snapshot => ({
   settings: {},
   xp: [],
   xpReady: false,
+  bosses: [],
+  rewards: [],
+  claims: [],
+  german: [],
+  questsReady: false,
 });
+
+const isTier = (v: unknown): v is Tier => TIERS.includes(v as Tier);
 
 /** Habit keys stored in Sanctuary's health_logs instead of habit_logs. */
 const HEALTH_METRIC_BY_KEY = new Map(
@@ -132,7 +160,7 @@ export class SupabaseStore implements PlannerStore {
 
   async load(): Promise<Snapshot> {
     const uid = this.userId;
-    const [tasks, days, items, done, habits, health, exercises, plans, settings, xp] = await Promise.all([
+    const [tasks, days, items, done, habits, health, exercises, plans, settings, xp, bosses, rewards, claims, german] = await Promise.all([
       this.sb.from("plan_tasks").select("*").eq("user_id", uid),
       this.sb.from("planner_days").select("*").eq("user_id", uid),
       this.sb.from("daily_list_items").select("*").eq("user_id", uid).order("position"),
@@ -152,6 +180,10 @@ export class SupabaseStore implements PlannerStore {
         .eq("user_id", uid)
         .order("created_at")
         .limit(20000),
+      this.sb.from("boss_battles").select("*").eq("user_id", uid),
+      this.sb.from("rewards").select("*").eq("user_id", uid),
+      this.sb.from("reward_claims").select("reward_id,title,cost,claimed_on").eq("user_id", uid).order("created_at"),
+      this.sb.from("german_lessons").select("lesson,title,done_on").eq("user_id", uid),
     ]);
     for (const [r, what] of [
       [tasks, "plan_tasks"],
@@ -209,6 +241,26 @@ export class SupabaseStore implements PlannerStore {
     }
     for (const r of settings.data ?? []) snap.settings[r.key] = r.value;
     snap.xpReady = !xp.error;
+    // Phase 2b migration: without these tables quests and rewards stay hidden.
+    const qErr = bosses.error ?? rewards.error ?? claims.error ?? german.error;
+    if (qErr) console.warn("[planner] quests/rewards unavailable:", qErr.message);
+    snap.questsReady = !qErr;
+    for (const r of bosses.data ?? [])
+      if (isSkill(r.skill))
+        snap.bosses.push({
+          id: r.id,
+          title: r.title,
+          skill: r.skill,
+          target: r.target,
+          progress: r.progress,
+          auto: r.auto ?? null,
+          doneOn: r.done_on ?? null,
+          sortOrder: r.sort_order,
+        });
+    for (const r of rewards.data ?? [])
+      if (isTier(r.tier)) snap.rewards.push({ id: r.id, tier: r.tier, title: r.title, cost: r.cost, sortOrder: r.sort_order });
+    for (const r of claims.data ?? []) snap.claims.push({ rewardId: r.reward_id, title: r.title, cost: r.cost, date: r.claimed_on });
+    for (const r of german.data ?? []) snap.german.push({ lesson: r.lesson, title: r.title ?? null, date: r.done_on });
     for (const r of xp.data ?? [])
       if (isSkill(r.skill))
         snap.xp.push({ eventKey: r.event_key, source: r.source, skill: r.skill, amount: r.amount, date: r.occurred_on, reason: r.reason ?? "" });
@@ -377,6 +429,64 @@ export class SupabaseStore implements PlannerStore {
       );
   }
 
+  private bossRow(b: Boss) {
+    return {
+      user_id: this.userId,
+      id: b.id,
+      title: b.title,
+      skill: b.skill,
+      target: b.target,
+      progress: b.progress,
+      auto: b.auto,
+      done_on: b.doneOn,
+      sort_order: b.sortOrder,
+    };
+  }
+  private rewardRow(r: Reward) {
+    return { user_id: this.userId, id: r.id, tier: r.tier, title: r.title, cost: r.cost, sort_order: r.sortOrder };
+  }
+
+  async seedQuests(bosses: Boss[], rewards: Reward[]) {
+    if (bosses.length)
+      check(
+        await this.sb.from("boss_battles").upsert(bosses.map((b) => this.bossRow(b)), { onConflict: "user_id,id", ignoreDuplicates: true }),
+        "Adding boss battles",
+      );
+    if (rewards.length)
+      check(
+        await this.sb.from("rewards").upsert(rewards.map((r) => this.rewardRow(r)), { onConflict: "user_id,id", ignoreDuplicates: true }),
+        "Adding rewards",
+      );
+  }
+  async setBoss(b: Boss) {
+    check(await this.sb.from("boss_battles").upsert(this.bossRow(b), { onConflict: "user_id,id" }), "Saving boss battle");
+  }
+  async deleteBoss(id: string) {
+    check(await this.sb.from("boss_battles").delete().eq("user_id", this.userId).eq("id", id), "Deleting boss battle");
+  }
+  async setReward(r: Reward) {
+    check(await this.sb.from("rewards").upsert(this.rewardRow(r), { onConflict: "user_id,id" }), "Saving reward");
+  }
+  async deleteReward(id: string) {
+    check(await this.sb.from("rewards").delete().eq("user_id", this.userId).eq("id", id), "Deleting reward");
+  }
+  async addClaim(c: RewardClaim) {
+    check(
+      await this.sb.from("reward_claims").insert({ user_id: this.userId, reward_id: c.rewardId, title: c.title, cost: c.cost, claimed_on: c.date }),
+      "Claiming reward",
+    );
+  }
+  async setGermanLesson(lesson: number, row: GermanLesson | null) {
+    if (row)
+      check(
+        await this.sb
+          .from("german_lessons")
+          .upsert({ user_id: this.userId, lesson, title: row.title, done_on: row.date }, { onConflict: "user_id,lesson" }),
+        "Saving German lesson",
+      );
+    else check(await this.sb.from("german_lessons").delete().eq("user_id", this.userId).eq("lesson", lesson), "Removing German lesson");
+  }
+
   subscribe(onChange: () => void): () => void {
     // RLS applies to Realtime, so only this user's changes arrive. DELETE events
     // can't be filtered by column, so the user_id filter is applied to the
@@ -457,11 +567,15 @@ type Serialized = {
   workoutPlans?: [string, PlanItem[]][];
   settings?: Record<string, unknown>;
   xp?: XpEvent[];
+  bosses?: Boss[];
+  rewards?: Reward[];
+  claims?: RewardClaim[];
+  german?: GermanLesson[];
 };
 
 export class LocalStore implements PlannerStore {
   readonly kind = "local" as const;
-  private snap: Snapshot = { ...emptySnapshot(), xpReady: true };
+  private snap: Snapshot = { ...emptySnapshot(), xpReady: true, questsReady: true };
 
   constructor(private storage: Pick<Storage, "getItem" | "setItem"> = localStorage) {}
 
@@ -481,6 +595,11 @@ export class LocalStore implements PlannerStore {
           settings: s.settings ?? {},
           xp: s.xp ?? [],
           xpReady: true,
+          bosses: s.bosses ?? [],
+          rewards: s.rewards ?? [],
+          claims: s.claims ?? [],
+          german: s.german ?? [],
+          questsReady: true,
         };
       }
     } catch (e) {
@@ -500,6 +619,10 @@ export class LocalStore implements PlannerStore {
       workoutPlans: [...this.snap.workoutPlans],
       settings: this.snap.settings,
       xp: this.snap.xp,
+      bosses: this.snap.bosses,
+      rewards: this.snap.rewards,
+      claims: this.snap.claims,
+      german: this.snap.german,
     };
     this.storage.setItem(LOCAL_KEY, JSON.stringify(s));
   }
@@ -568,6 +691,38 @@ export class LocalStore implements PlannerStore {
   async addXpEvents(events: XpEvent[]) {
     const have = new Set(this.snap.xp.map((e) => e.eventKey));
     this.snap.xp.push(...events.filter((e) => !have.has(e.eventKey)));
+    this.save();
+  }
+  async seedQuests(bosses: Boss[], rewards: Reward[]) {
+    const hb = new Set(this.snap.bosses.map((b) => b.id));
+    const hr = new Set(this.snap.rewards.map((r) => r.id));
+    this.snap.bosses.push(...bosses.filter((b) => !hb.has(b.id)));
+    this.snap.rewards.push(...rewards.filter((r) => !hr.has(r.id)));
+    this.save();
+  }
+  async setBoss(b: Boss) {
+    this.snap.bosses = [...this.snap.bosses.filter((x) => x.id !== b.id), b];
+    this.save();
+  }
+  async deleteBoss(id: string) {
+    this.snap.bosses = this.snap.bosses.filter((x) => x.id !== id);
+    this.save();
+  }
+  async setReward(r: Reward) {
+    this.snap.rewards = [...this.snap.rewards.filter((x) => x.id !== r.id), r];
+    this.save();
+  }
+  async deleteReward(id: string) {
+    this.snap.rewards = this.snap.rewards.filter((x) => x.id !== id);
+    this.save();
+  }
+  async addClaim(c: RewardClaim) {
+    this.snap.claims.push(c);
+    this.save();
+  }
+  async setGermanLesson(lesson: number, row: GermanLesson | null) {
+    this.snap.german = this.snap.german.filter((l) => l.lesson !== lesson);
+    if (row) this.snap.german.push(row);
     this.save();
   }
   async importBackup(plan: ImportPlan) {

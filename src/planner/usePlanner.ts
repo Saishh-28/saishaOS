@@ -1,4 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Boss,
+  bossState,
+  coins,
+  dailyQuests,
+  DailyQuestDef,
+  GermanLesson,
+  germanQuest,
+  goodWeeks,
+  Reward,
+  RewardClaim,
+  SEED_BOSSES,
+  SEED_REWARDS,
+  weeklyQuest,
+  WeeklyQuest,
+} from "./quests";
 import { dayResult, earnedXp, levelInfo, LevelInfo, reconcileXp, Skill, SKILL_KEYS, streakInfo, StreakInfo, ticksToCount, xpTotals } from "./game";
 import { Block, GYM_HABIT } from "./plan";
 import { Anchor, anchorMl, clampDayMl, mondayOf, parseBottleMl, waterGoal } from "./water";
@@ -34,6 +50,11 @@ function cloneSnap(s: Snapshot): Snapshot {
     settings: { ...s.settings },
     xp: [...s.xp],
     xpReady: s.xpReady,
+    bosses: [...s.bosses],
+    rewards: [...s.rewards],
+    claims: [...s.claims],
+    german: [...s.german],
+    questsReady: s.questsReady,
   };
 }
 
@@ -433,11 +454,36 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     );
   }, [store, xpMissing, mutate]);
 
+  // First run with the Phase 2b tables: add your boss battles and reward list once.
+  useEffect(() => {
+    if (!store || !snap || !snap.questsReady || loadedOn !== today) return;
+    if (snap.settings.game_quests_seeded === true || creating.current.has("quests-seed")) return;
+    creating.current.add("quests-seed");
+    const hb = new Set(snap.bosses.map((b) => b.id));
+    const hr = new Set(snap.rewards.map((r) => r.id));
+    const bosses = SEED_BOSSES.filter((b) => !hb.has(b.id));
+    const rewards = snap.rewards.length ? [] : SEED_REWARDS.filter((r) => !hr.has(r.id));
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.bosses = [...n.bosses, ...bosses];
+        n.rewards = [...n.rewards, ...rewards];
+        n.settings.game_quests_seeded = true;
+        return n;
+      },
+      async () => {
+        await store.seedQuests(bosses, rewards);
+        await store.setSetting("game_quests_seeded", true);
+      },
+    );
+  }, [store, snap, loadedOn, today, mutate]);
+
   const game = useMemo((): Game | null => {
     if (!snap || !snap.xpReady) return null;
     const totals = xpTotals(snap.xp);
     const skills = Object.fromEntries(SKILL_KEYS.map((k) => [k, levelInfo(totals.bySkill[k])])) as Record<Skill, LevelInfo>;
-    const streak = streakInfo((d) => dayResult(snap, d, waterGoalOn(d)), today);
+    const dayOn = (d: string) => dayResult(snap, d, waterGoalOn(d));
+    const streak = streakInfo(dayOn, today);
     const rec = snap.days.get(today);
     const prog = rec
       ? dayProgress({ lists: rec.lists, done: snap.done, habits: snap.habits.get(today) ?? {}, water: snap.water.get(today) ?? 0, waterGoalMl: waterGoalOn(today), date: today })
@@ -450,8 +496,102 @@ export function usePlanner(store: PlannerStore | null, today: string) {
       rest: prog.rest,
       xpToday: totals.byDate.get(today) ?? 0,
       settled: xpMissing.length === 0,
+      quests: snap.questsReady
+        ? {
+            daily: dailyQuests(today, snap.habits.get(today) ?? {}),
+            weekly: weeklyQuest(snap.habits, today, today),
+            german: germanQuest(snap.german, today),
+            lessons: [...snap.german].sort((a, b) => a.lesson - b.lesson),
+            bosses: [...snap.bosses]
+              .sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title))
+              .map((b) => ({ ...b, ...bossState(b, snap.german) })),
+            rewards: [...snap.rewards].sort((a, b) => a.sortOrder - b.sortOrder || a.title.localeCompare(b.title)),
+            claims: snap.claims,
+            coins: coins(totals.total, snap.claims),
+            goodWeeks: goodWeeks(dayOn, today),
+          }
+        : null,
     };
   }, [snap, today, waterGoalOn, xpMissing]);
+
+  /* ---------------------- quests and rewards ---------------------- */
+
+  /** Tick (or untick) today's Nicos Weg lesson. */
+  const setGermanLesson = (lesson: number, title: string | null, done: boolean) => {
+    if (!store) return;
+    const row: GermanLesson | null = done ? { lesson, title: title?.trim().slice(0, 200) || null, date: today } : null;
+    return mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.german = n.german.filter((l) => l.lesson !== lesson);
+        if (row) n.german.push(row);
+        return n;
+      },
+      () => store.setGermanLesson(lesson, row),
+    );
+  };
+
+  /** Save a boss (new or edited). A manual boss reaching its target is beaten today (+200 XP). */
+  const saveBoss = (b: Boss) => {
+    if (!store) return;
+    const beaten = !b.auto && b.progress >= b.target;
+    const next: Boss = { ...b, doneOn: beaten ? b.doneOn ?? today : null };
+    return mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.bosses = [...n.bosses.filter((x) => x.id !== b.id), next];
+        return n;
+      },
+      () => store.setBoss(next),
+    );
+  };
+
+  const deleteBoss = (id: string) =>
+    store &&
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.bosses = n.bosses.filter((x) => x.id !== id);
+        return n;
+      },
+      () => store.deleteBoss(id),
+    );
+
+  const saveReward = (r: Reward) =>
+    store &&
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.rewards = [...n.rewards.filter((x) => x.id !== r.id), r];
+        return n;
+      },
+      () => store.setReward(r),
+    );
+
+  const deleteReward = (id: string) =>
+    store &&
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.rewards = n.rewards.filter((x) => x.id !== id);
+        return n;
+      },
+      () => store.deleteReward(id),
+    );
+
+  /** Spend coins on a reward. */
+  const claimReward = (r: Reward) => {
+    if (!store) return;
+    const claim: RewardClaim = { rewardId: r.id, title: r.title, cost: r.cost, date: today };
+    return mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.claims = [...n.claims, claim];
+        return n;
+      },
+      () => store.addClaim(claim),
+    );
+  };
 
   const setNotes = (notes: string) =>
     store &&
@@ -509,7 +649,26 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     setNotes,
     importBackup,
     game,
+    setGermanLesson,
+    saveBoss,
+    deleteBoss,
+    saveReward,
+    deleteReward,
+    claimReward,
   };
+}
+
+export interface Quests {
+  daily: (DailyQuestDef & { done: boolean })[];
+  weekly: WeeklyQuest;
+  /** Today's Nicos Weg lesson (null on Sundays). */
+  german: { lesson: number; done: GermanLesson | null } | null;
+  lessons: GermanLesson[];
+  bosses: (Boss & { beatenOn: string | null })[];
+  rewards: Reward[];
+  claims: RewardClaim[];
+  coins: { earned: number; spent: number; balance: number };
+  goodWeeks: number;
 }
 
 export interface Game {
@@ -523,6 +682,8 @@ export interface Game {
   xpToday: number;
   /** All earned XP is saved (so a level-up shown now is real). */
   settled: boolean;
+  /** Phase 2b (null until its tables exist). */
+  quests: Quests | null;
 }
 
 export type Planner = ReturnType<typeof usePlanner>;
