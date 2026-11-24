@@ -50,7 +50,7 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
     async loadData(userId, date): Promise<ReviewData> {
       const s = client();
       const healthMetrics = [WATER_METRIC, ...HABITS.flatMap((h) => (h.store.kind === "health" ? [h.store.metric] : []))];
-      const [tasks, done, items, habits, health, tomorrow, waterHistory, goalStart] = await Promise.all([
+      const [tasks, done, items, habits, health, tomorrow, waterHistory, goalStart, journal] = await Promise.all([
         s.from("plan_tasks").select("id,block,text,phase_start,sort_order,is_custom,is_ai").eq("user_id", userId),
         s.from("task_completions").select("task_id,done_date").eq("user_id", userId),
         s.from("daily_list_items").select("block,task_id,carried_over,position").eq("user_id", userId).eq("date", date).order("position"),
@@ -60,6 +60,8 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
         // For this week's water goal (see water.ts): water history + when the goal started.
         s.from("health_logs").select("value,logged_at").eq("user_id", userId).eq("metric", WATER_METRIC),
         s.from("user_settings").select("value").eq("user_id", userId).eq("key", "water_goal_start").maybeSingle(),
+        // Only an entry you ticked "share with Lumi" on; private entries are never read here.
+        s.from("journal_entries").select("content").eq("user_id", userId).eq("entry_date", date).eq("share_with_lumi", true).maybeSingle(),
       ]);
       for (const [r, w] of [[tasks, "plan_tasks"], [done, "task_completions"], [items, "daily_list_items"], [habits, "habit_logs"], [health, "health_logs"], [tomorrow, "tomorrow"]] as const)
         check(r, `Loading ${w}`);
@@ -95,6 +97,7 @@ export function makePlannerDeps(env: PlannerEnv, token: string | null): PlannerD
         water,
         waterGoalMl,
         tomorrowHasList: (tomorrow.count ?? 0) > 0,
+        sharedJournal: journal.error ? null : (journal.data?.content ?? null),
       };
     },
 
