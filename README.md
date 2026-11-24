@@ -23,7 +23,7 @@ Data syncs to Supabase when you're signed in, and falls back to `localStorage` w
 - **Backend:** one Cloudflare Worker ([`worker.ts`](worker.ts)) that serves the static build and the `/api/*` routes
 - **Database and auth:** Supabase (Postgres with Row Level Security on every table; Google and email sign-in)
 - **AI:** Google Gemini via `@google/genai`, called only from the Worker
-- **Tests:** Vitest (204 tests)
+- **Tests:** Vitest (208 tests)
 
 ## Project structure
 
@@ -74,11 +74,22 @@ You need Node 20+ and a Supabase project. A Gemini API key is only needed for th
    ```bash
    npm run dev
    ```
-   Open http://localhost:5173 (dashboard) or http://localhost:5173/planner (planner). `npm run dev` runs the real `worker.ts` through `@cloudflare/vite-plugin`, so the API behaves exactly as it does in production.
+   Open http://localhost:5173 (Home). `npm run dev` runs the real `worker.ts` through `@cloudflare/vite-plugin`, so the API behaves exactly as it does in production.
 
 Other scripts: `npm test` (Vitest), `npm run lint` (type-check), `npm run build`, `npm run preview` (production build served by the local Workers runtime).
 
-**Dev-only date override:** `/planner?date=2026-11-23` pretends today is that date, which is handy for testing gym days and rollover. It's removed from production builds. **Careful:** opening a date creates that day's list in your real Supabase data (the same as opening the planner on that day), so delete test days afterwards or use a test account.
+**Dev-only date override:** `/planner?date=2026-11-23` pretends today is that date, which is handy for testing gym days and rollover. It's removed from production builds. Opening a date creates that day's list, so only use it with a test project (below).
+
+### Develop against a test project (so testing never changes your real data)
+
+1. **Create a second Supabase project** (e.g. "saishaOS-dev"; the free plan allows two). In its SQL Editor, run [`supabase_schema.sql`](supabase_schema.sql).
+2. **Test account:** Authentication → Providers: turn on Email. Authentication → Users → **Add user** with an email you'll only use for testing (choose the password yourself). Add `http://localhost:5173/**` to Authentication → URL Configuration → Redirect URLs.
+3. **Browser app:** create `.env.development.local` (git-ignored; only `npm run dev` reads it) with the test project's **Project URL** and **publishable key**, plus `VITE_SUPABASE_ENV="dev"` (see [`.env.example`](.env.example)).
+4. **Local server:** in `.dev.vars`, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` to the test project and add `SUPABASE_ENV="dev"` (see [`.dev.vars.example`](.dev.vars.example)). `GEMINI_API_KEY` stays.
+5. **Restart** `npm run dev` and sign in with the test account. The header shows **Test data (dev project)**.
+6. **Optional fake history:** after the first sign-in, edit the email in [`supabase/seed-dev.sql`](supabase/seed-dev.sql) and run it in the **test** project's SQL Editor (10 days of habits, water, skincare, workouts and meals).
+
+**The guard:** if `npm run dev` is pointed at a project that isn't marked as dev, the app stops on a warning before loading or writing anything (you can still continue for that tab), and the local server refuses `/api/planner/*` and `/api/lumi/*` unless `.dev.vars` has `ALLOW_REAL_DATA_LOCALLY="true"`. The deployed site is never affected: `.env.development.local` isn't used by builds, and the guard only applies on `localhost`. See [`src/devGuard.ts`](src/devGuard.ts).
 
 ## Deploy (Cloudflare Workers)
 

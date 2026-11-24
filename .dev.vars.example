@@ -8,9 +8,14 @@
 # Google AI Studio > Get API key
 GEMINI_API_KEY=""
 
-# Same values as VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY in .env
+# The same project as the browser app uses locally. For local testing that's
+# your TEST project (the values in .env.development.local), marked as dev:
 SUPABASE_URL=""
 SUPABASE_ANON_KEY=""
+SUPABASE_ENV="dev"
+# Without SUPABASE_ENV="dev", the local server refuses /api/planner and /api/lumi
+# calls. Only if you really mean to test against real data:
+# ALLOW_REAL_DATA_LOCALLY="true"
 
 # Optional model overrides
 # GEMINI_MODEL="gemini-3.6-flash"
