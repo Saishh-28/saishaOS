@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { dayPct, earnedXp, levelInfo, LevelInfo, reconcileXp, Skill, SKILL_KEYS, streakInfo, StreakInfo, ticksToCount, xpTotals } from "./game";
 import { Block, GYM_HABIT } from "./plan";
 import { Anchor, anchorMl, clampDayMl, mondayOf, parseBottleMl, waterGoal } from "./water";
 import { ExerciseLog, GymSession, isSessionComplete } from "./gym";
@@ -10,6 +11,7 @@ import {
   createDayLists,
   CUSTOM_SORT_BASE,
   DayLists,
+  dayProgress,
   parsePrototypeBackup,
   PlanTask,
   previousDate,
@@ -30,6 +32,8 @@ function cloneSnap(s: Snapshot): Snapshot {
     exercises: new Map(s.exercises),
     workoutPlans: new Map(s.workoutPlans),
     settings: { ...s.settings },
+    xp: [...s.xp],
+    xpReady: s.xpReady,
   };
 }
 
@@ -396,6 +400,58 @@ export function usePlanner(store: PlannerStore | null, today: string) {
   }, [store, snap, loadedOn, today, goalStart]);
   const goal = waterGoal(snap?.water ?? new Map(), goalStart ?? mondayOf(today), today);
 
+  /* ---------------------------- the game ---------------------------- */
+  const waterGoalOn = useCallback(
+    (date: string) => waterGoal(snap?.water ?? new Map(), goalStart ?? mondayOf(date), date).goalMl,
+    [snap, goalStart],
+  );
+  // XP rows still to write so the stored history matches what you've done.
+  const xpMissing = useMemo(
+    () => (snap && snap.xpReady && loadedOn === today ? reconcileXp(earnedXp(snap, today, waterGoalOn), snap.xp) : []),
+    [snap, loadedOn, today, waterGoalOn],
+  );
+  // If saving XP fails once, stop retrying until the app is reopened (no loop of failing writes).
+  const xpBroken = useRef(false);
+  useEffect(() => {
+    if (!store || !xpMissing.length || xpBroken.current) return;
+    const rows = xpMissing;
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        const have = new Set(n.xp.map((e) => e.eventKey));
+        n.xp = [...n.xp, ...rows.filter((e) => !have.has(e.eventKey))];
+        return n;
+      },
+      async () => {
+        try {
+          await store.addXpEvents(rows);
+        } catch (e) {
+          xpBroken.current = true;
+          throw e;
+        }
+      },
+    );
+  }, [store, xpMissing, mutate]);
+
+  const game = useMemo((): Game | null => {
+    if (!snap || !snap.xpReady) return null;
+    const totals = xpTotals(snap.xp);
+    const skills = Object.fromEntries(SKILL_KEYS.map((k) => [k, levelInfo(totals.bySkill[k])])) as Record<Skill, LevelInfo>;
+    const streak = streakInfo((d) => dayPct(snap, d, waterGoalOn(d)), today);
+    const rec = snap.days.get(today);
+    const prog = rec
+      ? dayProgress({ lists: rec.lists, done: snap.done, habits: snap.habits.get(today) ?? {}, water: snap.water.get(today) ?? 0, waterGoalMl: waterGoalOn(today), date: today })
+      : { done: 0, total: 1 };
+    return {
+      level: levelInfo(totals.total),
+      skills,
+      streak,
+      ticksLeft: ticksToCount(prog.done, prog.total),
+      xpToday: totals.byDate.get(today) ?? 0,
+      settled: xpMissing.length === 0,
+    };
+  }, [snap, today, waterGoalOn, xpMissing]);
+
   const setNotes = (notes: string) =>
     store &&
     mutate(
@@ -451,7 +507,19 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     setWater,
     setNotes,
     importBackup,
+    game,
   };
+}
+
+export interface Game {
+  level: LevelInfo;
+  skills: Record<Skill, LevelInfo>;
+  streak: StreakInfo;
+  /** Ticks still needed today for it to count towards the streak. */
+  ticksLeft: number;
+  xpToday: number;
+  /** All earned XP is saved (so a level-up shown now is real). */
+  settled: boolean;
 }
 
 export type Planner = ReturnType<typeof usePlanner>;
