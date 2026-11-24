@@ -58,33 +58,7 @@ const sure = (what: string) => window.confirm(`Delete ${what}? This can't be und
 /* More                                                                */
 /* ------------------------------------------------------------------ */
 
-const MORE: { to: string; title: string; sub: string }[] = [
-  { to: "/planner/meals", title: "Meals · Moonlit Garden", sub: "Today's eggetarian meals, your meal plan" },
-  { to: "/planner/calendar", title: "Calendar", sub: "Your 13-week journey, day by day" },
-  { to: "/planner/quests", title: "Quests", sub: "Daily, weekly, Nicos Weg German, boss battles" },
-  { to: "/planner/rewards", title: "Rewards", sub: "Coins, your reward list, dreams" },
-  { to: "/planner/review", title: "Evening review", sub: "Report, plan tomorrow with Lumi, CSV" },
-  { to: "/planner/care", title: "Care · Moonlit Garden", sub: "Skincare, hair, mood, journal, book notes" },
-  { to: "/planner/lumi", title: "Talk to Lumi", sub: "Your star spirit; can suggest tasks" },
-  { to: "/planner/music", title: "Music Room", sub: "Songs, lyrics, chords" },
-  { to: "/planner/treasury", title: "Treasury · Market Square", sub: "Savings, budget, spending" },
-  { to: "/planner/settings", title: "Settings", sub: "About me, workouts, water, sound, backup" },
-];
-
-export function MoreScreen() {
-  return (
-    <ul className="links more-list">
-      {MORE.map((m) => (
-        <li key={m.to}>
-          <Link to={m.to}>
-            <b>{m.title}</b>
-            <span className="muted">{m.sub}</span>
-          </Link>
-        </li>
-      ))}
-    </ul>
-  );
-}
+/* The places that used to be listed here are castles on Home now (castles.tsx). */
 
 /* ------------------------------------------------------------------ */
 /* Study: courses + assignments                                        */

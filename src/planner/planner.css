@@ -2183,3 +2183,123 @@ body:has(.planner) {
   height: auto;
   display: block;
 }
+
+/* Castles on Home (replace the More tab) */
+.planner ul.castle-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.planner a.castle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 112px;
+  padding: 8px 4px 10px;
+  border-radius: 16px;
+  text-decoration: none;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.planner a.castle:active {
+  transform: scale(0.97);
+}
+.planner .castle-art {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  width: 64px;
+  height: 58px;
+  margin-bottom: 4px;
+}
+.planner .c-glow {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -4px;
+  height: 14px;
+  border-radius: 50%;
+  filter: blur(8px);
+  opacity: 0.55;
+}
+.planner .c-tower,
+.planner .c-keep {
+  position: relative;
+  display: block;
+  border-radius: 3px 3px 2px 2px;
+  box-shadow: inset 0 2px 4px rgba(255, 255, 255, 0.35), inset 0 -6px 8px rgba(20, 10, 60, 0.35);
+}
+.planner .c-tower {
+  width: 14px;
+  height: 30px;
+}
+.planner .c-keep {
+  width: 26px;
+  height: 36px;
+}
+.planner .c-roof {
+  position: absolute;
+  left: 50%;
+  bottom: 100%;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 9px solid transparent;
+  border-right: 9px solid transparent;
+  border-bottom: 14px solid #ffd98a;
+}
+.planner .c-roof.big {
+  border-left-width: 15px;
+  border-right-width: 15px;
+  border-bottom-width: 18px;
+}
+.planner .c-door {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 10px;
+  height: 14px;
+  transform: translateX(-50%);
+  border-radius: 5px 5px 0 0;
+  background: rgba(20, 10, 60, 0.75);
+  box-shadow: 0 0 6px rgba(255, 217, 138, 0.6);
+}
+.planner .c-name {
+  font-size: 12px;
+  font-weight: 800;
+  color: #fff7e6;
+  line-height: 1.2;
+}
+.planner .c-what {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
+/* Back button on every screen that isn't on the bottom bar */
+.planner .back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--tap);
+  padding: 0 14px 0 10px;
+  margin: 0 0 12px;
+  border-radius: 22px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+.planner .back-btn span {
+  font-size: 22px;
+  line-height: 1;
+}

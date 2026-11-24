@@ -12,6 +12,7 @@ import { Link } from "./router";
 import { Lumi, reducedMotion } from "./ui";
 import { sfx } from "./sound";
 import { TodaysQuestsCard } from "./questScreens";
+import { Castles } from "./castles";
 
 interface IslandLook {
   /** Position inside the 390 × 430 kingdom, in px of that box (scaled to %). */
@@ -136,6 +137,7 @@ export function Kingdom({ game, fallback }: { game: Game; fallback: string }) {
         {line}
       </div>
       {game.quests && <TodaysQuestsCard q={game.quests} />}
+      <Castles />
     </>
   );
 }
