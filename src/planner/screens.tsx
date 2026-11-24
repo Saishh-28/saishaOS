@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Block, SCHEDULE } from "./plan";
 import { Kingdom } from "./kingdom";
+import { NextMealCard } from "./mealsScreen";
 import { Habits, isComebackWeek, levelOn, MAX_TRAINING_LEVEL, sessionAtLevel, sessionsBetween, suggestWeight, Track, TrackLevel } from "./training";
 import { ANCHORS, anchorMl, daysAtGoalThisWeek, DRINKS, GLASS_ML, litres, waterMilestone } from "./water";
 import {
@@ -192,6 +193,7 @@ export function TodayScreen({ p, today, minutes, toast }: ScreenProps) {
         <RestDayButton p={p} today={today} toast={toast} />
       </div>
       <AnchorsCard p={p} today={today} toast={toast} />
+      <NextMealCard p={p} today={today} minutes={minutes} />
       <div className="card summary">
         <h2>
           Up next <span className="sub">tap to open</span>

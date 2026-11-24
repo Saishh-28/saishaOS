@@ -13,6 +13,7 @@ import { glassesToMl } from "./water";
 import type { WorkoutDay } from "./plan";
 import { isSkill, XpEvent } from "./game";
 import { Boss, GermanLesson, Reward, RewardClaim, Tier, TIERS } from "./quests";
+import { isMealSlot, MealLog, MealPlanRow, MealSlot } from "./meals";
 
 export interface DayRecord {
   lists: DayLists;
@@ -38,6 +39,10 @@ export interface Snapshot {
   german: GermanLesson[];
   /** False until the Phase 2b tables exist (quests and rewards stay hidden). */
   questsReady: boolean;
+  mealPlan: MealPlanRow[];
+  meals: MealLog[];
+  /** False until the Phase 3b tables exist (Meals stays hidden). */
+  mealsReady: boolean;
 }
 
 export interface PlannerStore {
@@ -74,6 +79,11 @@ export interface PlannerStore {
   addClaim(claim: RewardClaim): Promise<void>;
   /** Save a Nicos Weg lesson as done, or with null, remove it. */
   setGermanLesson(lesson: number, row: GermanLesson | null): Promise<void>;
+  /** Add meal plan rows you don't have yet (first run). Never overwrites. */
+  seedMealPlan(rows: MealPlanRow[]): Promise<void>;
+  setMealPlanRow(row: MealPlanRow): Promise<void>;
+  /** Log a meal ("ate this" / "something else"), or with null, clear it. */
+  setMealLog(date: string, slot: MealSlot, log: MealLog | null): Promise<void>;
   importBackup(plan: ImportPlan): Promise<void>;
   /** Live sync: call `onChange` when another device changes this user's data. Returns unsubscribe. */
   subscribe?(onChange: () => void): () => void;
@@ -95,6 +105,8 @@ export const LIVE_TABLES = [
   "rewards",
   "reward_claims",
   "german_lessons",
+  "meal_plan",
+  "meal_logs",
 ] as const;
 
 export const emptySnapshot = (): Snapshot => ({
@@ -113,6 +125,9 @@ export const emptySnapshot = (): Snapshot => ({
   claims: [],
   german: [],
   questsReady: false,
+  mealPlan: [],
+  meals: [],
+  mealsReady: false,
 });
 
 const isTier = (v: unknown): v is Tier => TIERS.includes(v as Tier);
@@ -160,7 +175,7 @@ export class SupabaseStore implements PlannerStore {
 
   async load(): Promise<Snapshot> {
     const uid = this.userId;
-    const [tasks, days, items, done, habits, health, exercises, plans, settings, xp, bosses, rewards, claims, german] = await Promise.all([
+    const [tasks, days, items, done, habits, health, exercises, plans, settings, xp, bosses, rewards, claims, german, mealPlan, meals] = await Promise.all([
       this.sb.from("plan_tasks").select("*").eq("user_id", uid),
       this.sb.from("planner_days").select("*").eq("user_id", uid),
       this.sb.from("daily_list_items").select("*").eq("user_id", uid).order("position"),
@@ -184,6 +199,8 @@ export class SupabaseStore implements PlannerStore {
       this.sb.from("rewards").select("*").eq("user_id", uid),
       this.sb.from("reward_claims").select("reward_id,title,cost,claimed_on").eq("user_id", uid).order("created_at"),
       this.sb.from("german_lessons").select("lesson,title,done_on").eq("user_id", uid),
+      this.sb.from("meal_plan").select("weekday,slot,text").eq("user_id", uid),
+      this.sb.from("meal_logs").select("date,slot,ate,note").eq("user_id", uid),
     ]);
     for (const [r, what] of [
       [tasks, "plan_tasks"],
@@ -261,6 +278,13 @@ export class SupabaseStore implements PlannerStore {
       if (isTier(r.tier)) snap.rewards.push({ id: r.id, tier: r.tier, title: r.title, cost: r.cost, sortOrder: r.sort_order });
     for (const r of claims.data ?? []) snap.claims.push({ rewardId: r.reward_id, title: r.title, cost: r.cost, date: r.claimed_on });
     for (const r of german.data ?? []) snap.german.push({ lesson: r.lesson, title: r.title ?? null, date: r.done_on });
+    // Phase 3b migration: without these tables Meals stays hidden.
+    const mErr = mealPlan.error ?? meals.error;
+    if (mErr) console.warn("[planner] meals unavailable:", mErr.message);
+    snap.mealsReady = !mErr;
+    for (const r of mealPlan.data ?? []) if (isMealSlot(r.slot)) snap.mealPlan.push({ weekday: r.weekday, slot: r.slot, text: r.text });
+    for (const r of meals.data ?? [])
+      if (isMealSlot(r.slot) && (r.ate === "plan" || r.ate === "other")) snap.meals.push({ date: r.date, slot: r.slot, ate: r.ate, note: r.note ?? null });
     for (const r of xp.data ?? [])
       if (isSkill(r.skill))
         snap.xp.push({ eventKey: r.event_key, source: r.source, skill: r.skill, amount: r.amount, date: r.occurred_on, reason: r.reason ?? "" });
@@ -487,6 +511,34 @@ export class SupabaseStore implements PlannerStore {
     else check(await this.sb.from("german_lessons").delete().eq("user_id", this.userId).eq("lesson", lesson), "Removing German lesson");
   }
 
+  async seedMealPlan(rows: MealPlanRow[]) {
+    if (!rows.length) return;
+    check(
+      await this.sb
+        .from("meal_plan")
+        .upsert(rows.map((r) => ({ user_id: this.userId, ...r })), { onConflict: "user_id,weekday,slot", ignoreDuplicates: true }),
+      "Adding your meal plan",
+    );
+  }
+  async setMealPlanRow(r: MealPlanRow) {
+    check(
+      await this.sb
+        .from("meal_plan")
+        .upsert({ user_id: this.userId, ...r, updated_at: new Date().toISOString() }, { onConflict: "user_id,weekday,slot" }),
+      "Saving meal",
+    );
+  }
+  async setMealLog(date: string, slot: MealSlot, log: MealLog | null) {
+    if (log)
+      check(
+        await this.sb
+          .from("meal_logs")
+          .upsert({ user_id: this.userId, date, slot, ate: log.ate, note: log.note, updated_at: new Date().toISOString() }, { onConflict: "user_id,date,slot" }),
+        "Saving meal",
+      );
+    else check(await this.sb.from("meal_logs").delete().eq("user_id", this.userId).eq("date", date).eq("slot", slot), "Clearing meal");
+  }
+
   subscribe(onChange: () => void): () => void {
     // RLS applies to Realtime, so only this user's changes arrive. DELETE events
     // can't be filtered by column, so the user_id filter is applied to the
@@ -571,11 +623,13 @@ type Serialized = {
   rewards?: Reward[];
   claims?: RewardClaim[];
   german?: GermanLesson[];
+  mealPlan?: MealPlanRow[];
+  meals?: MealLog[];
 };
 
 export class LocalStore implements PlannerStore {
   readonly kind = "local" as const;
-  private snap: Snapshot = { ...emptySnapshot(), xpReady: true, questsReady: true };
+  private snap: Snapshot = { ...emptySnapshot(), xpReady: true, questsReady: true, mealsReady: true };
 
   constructor(private storage: Pick<Storage, "getItem" | "setItem"> = localStorage) {}
 
@@ -600,6 +654,9 @@ export class LocalStore implements PlannerStore {
           claims: s.claims ?? [],
           german: s.german ?? [],
           questsReady: true,
+          mealPlan: s.mealPlan ?? [],
+          meals: s.meals ?? [],
+          mealsReady: true,
         };
       }
     } catch (e) {
@@ -623,6 +680,8 @@ export class LocalStore implements PlannerStore {
       rewards: this.snap.rewards,
       claims: this.snap.claims,
       german: this.snap.german,
+      mealPlan: this.snap.mealPlan,
+      meals: this.snap.meals,
     };
     this.storage.setItem(LOCAL_KEY, JSON.stringify(s));
   }
@@ -723,6 +782,20 @@ export class LocalStore implements PlannerStore {
   async setGermanLesson(lesson: number, row: GermanLesson | null) {
     this.snap.german = this.snap.german.filter((l) => l.lesson !== lesson);
     if (row) this.snap.german.push(row);
+    this.save();
+  }
+  async seedMealPlan(rows: MealPlanRow[]) {
+    const have = new Set(this.snap.mealPlan.map((r) => `${r.weekday}|${r.slot}`));
+    this.snap.mealPlan.push(...rows.filter((r) => !have.has(`${r.weekday}|${r.slot}`)));
+    this.save();
+  }
+  async setMealPlanRow(r: MealPlanRow) {
+    this.snap.mealPlan = [...this.snap.mealPlan.filter((x) => !(x.weekday === r.weekday && x.slot === r.slot)), r];
+    this.save();
+  }
+  async setMealLog(date: string, slot: MealSlot, log: MealLog | null) {
+    this.snap.meals = this.snap.meals.filter((x) => !(x.date === date && x.slot === slot));
+    if (log) this.snap.meals.push(log);
     this.save();
   }
   async importBackup(plan: ImportPlan) {

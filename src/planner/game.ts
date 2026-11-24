@@ -14,6 +14,7 @@ import { addDays, Completions, DayLists, dayProgress, PlanTask } from "./logic";
 import { Block, GYM_HABIT, HABITS } from "./plan";
 import { ExerciseLogs, sessionFor } from "./gym";
 import { Boss, GermanLesson, questXp } from "./quests";
+import { MealLog, mealXp } from "./meals";
 
 export type Skill = "body" | "mind" | "business" | "glow" | "family";
 
@@ -92,6 +93,8 @@ export interface GameData {
   bosses?: readonly Boss[];
   /** The Monday Strength Level 2 was reached (Phase 2c), for the boss battle. */
   strengthL2On?: string | null;
+  /** Meals you logged (Phase 3b). */
+  meals?: readonly MealLog[];
 }
 
 const inRange = (date: string, today: string) => date >= GAME_START && date <= today;
@@ -149,6 +152,7 @@ export function earnedXp(d: GameData, today: string, waterGoalOn: (date: string)
   }
   // Daily / weekly quests, Nicos Weg lessons, beaten bosses.
   out.push(...questXp(d, today, (date) => inRange(date, today)));
+  out.push(...mealXp(d.meals ?? [], (date) => inRange(date, today)));
   return out;
 }
 

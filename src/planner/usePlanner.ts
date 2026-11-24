@@ -15,6 +15,7 @@ import {
   weeklyQuest,
   WeeklyQuest,
 } from "./quests";
+import { MealAte, MealLog, MealPlanRow, MealSlot, SEED_MEAL_PLAN } from "./meals";
 import { isComebackWeek, parseStoredLevels, StoredLevels, trackLevel, TrackLevel, withStored } from "./training";
 import { dayResult, earnedXp, levelInfo, LevelInfo, reconcileXp, Skill, SKILL_KEYS, streakInfo, StreakInfo, ticksToCount, xpTotals } from "./game";
 import { Block, GYM_HABIT } from "./plan";
@@ -56,6 +57,9 @@ function cloneSnap(s: Snapshot): Snapshot {
     claims: [...s.claims],
     german: [...s.german],
     questsReady: s.questsReady,
+    mealPlan: [...s.mealPlan],
+    meals: [...s.meals],
+    mealsReady: s.mealsReady,
   };
 }
 
@@ -513,6 +517,26 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     );
   }, [store, snap, loadedOn, today, mutate]);
 
+  // First run with the Phase 3b tables: add your meal plan once.
+  useEffect(() => {
+    if (!store || !snap || !snap.mealsReady || loadedOn !== today) return;
+    if (snap.settings.meal_plan_seeded === true || creating.current.has("meals-seed")) return;
+    creating.current.add("meals-seed");
+    const rows = snap.mealPlan.length ? [] : SEED_MEAL_PLAN;
+    mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.mealPlan = [...n.mealPlan, ...rows];
+        n.settings.meal_plan_seeded = true;
+        return n;
+      },
+      async () => {
+        await store.seedMealPlan(rows);
+        await store.setSetting("meal_plan_seeded", true);
+      },
+    );
+  }, [store, snap, loadedOn, today, mutate]);
+
   const game = useMemo((): Game | null => {
     if (!snap || !snap.xpReady) return null;
     const totals = xpTotals(snap.xp);
@@ -548,6 +572,37 @@ export function usePlanner(store: PlannerStore | null, today: string) {
         : null,
     };
   }, [snap, today, waterGoalOn, xpMissing, strengthL2On]);
+
+  /* ----------------------------- meals ----------------------------- */
+
+  /** Log today's meal ("plan" = ate this, "other" = something else), or with null, clear it. */
+  const setMeal = (slot: MealSlot, ate: MealAte | null, note: string | null = null) => {
+    if (!store) return;
+    const log: MealLog | null = ate ? { date: today, slot, ate, note: note?.trim().slice(0, 300) || null } : null;
+    return mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.meals = n.meals.filter((m) => !(m.date === today && m.slot === slot));
+        if (log) n.meals.push(log);
+        return n;
+      },
+      () => store.setMealLog(today, slot, log),
+    );
+  };
+
+  const saveMealPlanRow = (row: MealPlanRow) => {
+    if (!store) return;
+    const r = { ...row, text: row.text.trim().slice(0, 300) };
+    if (!r.text) return;
+    return mutate(
+      (s) => {
+        const n = cloneSnap(s);
+        n.mealPlan = [...n.mealPlan.filter((x) => !(x.weekday === r.weekday && x.slot === r.slot)), r];
+        return n;
+      },
+      () => store.setMealPlanRow(r),
+    );
+  };
 
   /* ---------------------- quests and rewards ---------------------- */
 
@@ -685,6 +740,8 @@ export function usePlanner(store: PlannerStore | null, today: string) {
     importBackup,
     game,
     training,
+    setMeal,
+    saveMealPlanRow,
     setGermanLesson,
     saveBoss,
     deleteBoss,

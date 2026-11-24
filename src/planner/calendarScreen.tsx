@@ -253,6 +253,17 @@ function DaySheet({
             </li>
           )}
         </ul>
+        {snap.meals.some((m) => m.date === date) && (
+          <>
+            <h3>Meals</h3>
+            <div className="muted small">
+              {snap.meals
+                .filter((m) => m.date === date)
+                .map((m) => `${m.slot[0].toUpperCase()}${m.slot.slice(1)}: ${m.ate === "plan" ? "as planned" : m.note || "something else"}`)
+                .join(" · ")}
+            </div>
+          </>
+        )}
         <h3>Habits</h3>
         <div className="muted small">
           {hs.filter((h) => habits[h.key]).map((h) => h.label).join(" · ") || "None ticked"}

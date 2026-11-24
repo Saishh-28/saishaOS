@@ -21,6 +21,7 @@ export const PLANNER_VIEWS = [
   "quests",
   "rewards",
   "calendar",
+  "meals",
 ] as const;
 export type PlannerView = (typeof PLANNER_VIEWS)[number];
 
