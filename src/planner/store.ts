@@ -14,6 +14,7 @@ import type { WorkoutDay } from "./plan";
 import { isSkill, XpEvent } from "./game";
 import { Boss, GermanLesson, Reward, RewardClaim, Tier, TIERS } from "./quests";
 import { isMealSlot, MealLog, MealPlanRow, MealSlot } from "./meals";
+import { BREAKOUT_AREAS, BreakoutArea, CareStep, HAIR_ITEMS, HairItem, HairLog, SkinLog } from "./care";
 
 export interface DayRecord {
   lists: DayLists;
@@ -43,6 +44,14 @@ export interface Snapshot {
   meals: MealLog[];
   /** False until the Phase 3b tables exist (Meals stays hidden). */
   mealsReady: boolean;
+  careSteps: CareStep[];
+  skin: SkinLog[];
+  hair: HairLog[];
+  /** Days with a journal entry (dates only; the text stays on the Care screen). */
+  journalDates: string[];
+  bookNotes: { id: string; date: string; section: string }[];
+  /** False until the Phase 2.5 tables exist (the new Care screen stays hidden). */
+  careReady: boolean;
 }
 
 export interface PlannerStore {
@@ -84,6 +93,12 @@ export interface PlannerStore {
   setMealPlanRow(row: MealPlanRow): Promise<void>;
   /** Log a meal ("ate this" / "something else"), or with null, clear it. */
   setMealLog(date: string, slot: MealSlot, log: MealLog | null): Promise<void>;
+  seedCareSteps(steps: CareStep[]): Promise<void>;
+  setCareStep(step: CareStep): Promise<void>;
+  deleteCareStep(id: string): Promise<void>;
+  setSkinLog(log: SkinLog): Promise<void>;
+  /** Save a wash day, or with null, delete that day's log. */
+  setHairLog(date: string, log: HairLog | null): Promise<void>;
   importBackup(plan: ImportPlan): Promise<void>;
   /** Live sync: call `onChange` when another device changes this user's data. Returns unsubscribe. */
   subscribe?(onChange: () => void): () => void;
@@ -107,6 +122,11 @@ export const LIVE_TABLES = [
   "german_lessons",
   "meal_plan",
   "meal_logs",
+  "care_steps",
+  "skin_logs",
+  "hair_logs",
+  "journal_entries",
+  "book_notes",
 ] as const;
 
 export const emptySnapshot = (): Snapshot => ({
@@ -128,7 +148,16 @@ export const emptySnapshot = (): Snapshot => ({
   mealPlan: [],
   meals: [],
   mealsReady: false,
+  careSteps: [],
+  skin: [],
+  hair: [],
+  journalDates: [],
+  bookNotes: [],
+  careReady: false,
 });
+
+const isArea = (v: unknown): v is BreakoutArea => BREAKOUT_AREAS.includes(v as BreakoutArea);
+const isHairItem = (v: unknown): v is HairItem => HAIR_ITEMS.some((i) => i.id === v);
 
 const isTier = (v: unknown): v is Tier => TIERS.includes(v as Tier);
 
@@ -175,7 +204,7 @@ export class SupabaseStore implements PlannerStore {
 
   async load(): Promise<Snapshot> {
     const uid = this.userId;
-    const [tasks, days, items, done, habits, health, exercises, plans, settings, xp, bosses, rewards, claims, german, mealPlan, meals] = await Promise.all([
+    const [tasks, days, items, done, habits, health, exercises, plans, settings, xp, bosses, rewards, claims, german, mealPlan, meals, steps, skin, hair, journal, bookNotes] = await Promise.all([
       this.sb.from("plan_tasks").select("*").eq("user_id", uid),
       this.sb.from("planner_days").select("*").eq("user_id", uid),
       this.sb.from("daily_list_items").select("*").eq("user_id", uid).order("position"),
@@ -201,6 +230,12 @@ export class SupabaseStore implements PlannerStore {
       this.sb.from("german_lessons").select("lesson,title,done_on").eq("user_id", uid),
       this.sb.from("meal_plan").select("weekday,slot,text").eq("user_id", uid),
       this.sb.from("meal_logs").select("date,slot,ate,note").eq("user_id", uid),
+      this.sb.from("care_steps").select("*").eq("user_id", uid),
+      this.sb.from("skin_logs").select("date,steps,rating,areas,note").eq("user_id", uid),
+      this.sb.from("hair_logs").select("date,items,products,shedding,note").eq("user_id", uid),
+      // Dates only (for Journal XP); the text is only loaded on the Care screen.
+      this.sb.from("journal_entries").select("entry_date").eq("user_id", uid).neq("content", ""),
+      this.sb.from("book_notes").select("id,note_date,section").eq("user_id", uid),
     ]);
     for (const [r, what] of [
       [tasks, "plan_tasks"],
@@ -285,6 +320,19 @@ export class SupabaseStore implements PlannerStore {
     for (const r of mealPlan.data ?? []) if (isMealSlot(r.slot)) snap.mealPlan.push({ weekday: r.weekday, slot: r.slot, text: r.text });
     for (const r of meals.data ?? [])
       if (isMealSlot(r.slot) && (r.ate === "plan" || r.ate === "other")) snap.meals.push({ date: r.date, slot: r.slot, ate: r.ate, note: r.note ?? null });
+    // Phase 2.5 migration: without these tables the new Care screen stays hidden.
+    const cErr = steps.error ?? skin.error ?? hair.error ?? bookNotes.error;
+    if (cErr) console.warn("[planner] care unavailable:", cErr.message);
+    snap.careReady = !cErr;
+    for (const r of steps.data ?? [])
+      if (r.routine === "am" || r.routine === "pm")
+        snap.careSteps.push({ id: r.id, routine: r.routine, label: r.label, perWeek: r.per_week ?? null, sortOrder: r.sort_order });
+    for (const r of skin.data ?? [])
+      snap.skin.push({ date: r.date, steps: r.steps ?? [], rating: r.rating ?? null, areas: (r.areas ?? []).filter(isArea), note: r.note ?? null });
+    for (const r of hair.data ?? [])
+      snap.hair.push({ date: r.date, items: (r.items ?? []).filter(isHairItem), products: r.products ?? null, shedding: r.shedding ?? null, note: r.note ?? null });
+    if (!journal.error) snap.journalDates = [...new Set((journal.data ?? []).map((r: any) => String(r.entry_date)))];
+    for (const r of bookNotes.data ?? []) snap.bookNotes.push({ id: r.id, date: r.note_date, section: r.section });
     for (const r of xp.data ?? [])
       if (isSkill(r.skill))
         snap.xp.push({ eventKey: r.event_key, source: r.source, skill: r.skill, amount: r.amount, date: r.occurred_on, reason: r.reason ?? "" });
@@ -539,6 +587,46 @@ export class SupabaseStore implements PlannerStore {
     else check(await this.sb.from("meal_logs").delete().eq("user_id", this.userId).eq("date", date).eq("slot", slot), "Clearing meal");
   }
 
+  async seedCareSteps(steps: CareStep[]) {
+    if (!steps.length) return;
+    check(
+      await this.sb.from("care_steps").upsert(steps.map((s) => this.stepRow(s)), { onConflict: "user_id,id", ignoreDuplicates: true }),
+      "Adding your skincare steps",
+    );
+  }
+  private stepRow(s: CareStep) {
+    return { user_id: this.userId, id: s.id, routine: s.routine, label: s.label, per_week: s.perWeek, sort_order: s.sortOrder };
+  }
+  async setCareStep(s: CareStep) {
+    check(await this.sb.from("care_steps").upsert(this.stepRow(s), { onConflict: "user_id,id" }), "Saving step");
+  }
+  async deleteCareStep(id: string) {
+    check(await this.sb.from("care_steps").delete().eq("user_id", this.userId).eq("id", id), "Deleting step");
+  }
+  async setSkinLog(l: SkinLog) {
+    check(
+      await this.sb
+        .from("skin_logs")
+        .upsert(
+          { user_id: this.userId, date: l.date, steps: l.steps, rating: l.rating, areas: l.areas, note: l.note, updated_at: new Date().toISOString() },
+          { onConflict: "user_id,date" },
+        ),
+      "Saving skin log",
+    );
+  }
+  async setHairLog(date: string, l: HairLog | null) {
+    if (!l) return void check(await this.sb.from("hair_logs").delete().eq("user_id", this.userId).eq("date", date), "Deleting wash day");
+    check(
+      await this.sb
+        .from("hair_logs")
+        .upsert(
+          { user_id: this.userId, date, items: l.items, products: l.products, shedding: l.shedding, note: l.note, updated_at: new Date().toISOString() },
+          { onConflict: "user_id,date" },
+        ),
+      "Saving wash day",
+    );
+  }
+
   subscribe(onChange: () => void): () => void {
     // RLS applies to Realtime, so only this user's changes arrive. DELETE events
     // can't be filtered by column, so the user_id filter is applied to the
@@ -625,11 +713,14 @@ type Serialized = {
   german?: GermanLesson[];
   mealPlan?: MealPlanRow[];
   meals?: MealLog[];
+  careSteps?: CareStep[];
+  skin?: SkinLog[];
+  hair?: HairLog[];
 };
 
 export class LocalStore implements PlannerStore {
   readonly kind = "local" as const;
-  private snap: Snapshot = { ...emptySnapshot(), xpReady: true, questsReady: true, mealsReady: true };
+  private snap: Snapshot = { ...emptySnapshot(), xpReady: true, questsReady: true, mealsReady: true, careReady: true };
 
   constructor(private storage: Pick<Storage, "getItem" | "setItem"> = localStorage) {}
 
@@ -657,6 +748,12 @@ export class LocalStore implements PlannerStore {
           mealPlan: s.mealPlan ?? [],
           meals: s.meals ?? [],
           mealsReady: true,
+          careSteps: s.careSteps ?? [],
+          skin: s.skin ?? [],
+          hair: s.hair ?? [],
+          journalDates: [],
+          bookNotes: [],
+          careReady: true,
         };
       }
     } catch (e) {
@@ -682,6 +779,9 @@ export class LocalStore implements PlannerStore {
       german: this.snap.german,
       mealPlan: this.snap.mealPlan,
       meals: this.snap.meals,
+      careSteps: this.snap.careSteps,
+      skin: this.snap.skin,
+      hair: this.snap.hair,
     };
     this.storage.setItem(LOCAL_KEY, JSON.stringify(s));
   }
@@ -796,6 +896,28 @@ export class LocalStore implements PlannerStore {
   async setMealLog(date: string, slot: MealSlot, log: MealLog | null) {
     this.snap.meals = this.snap.meals.filter((x) => !(x.date === date && x.slot === slot));
     if (log) this.snap.meals.push(log);
+    this.save();
+  }
+  async seedCareSteps(steps: CareStep[]) {
+    const have = new Set(this.snap.careSteps.map((s) => s.id));
+    this.snap.careSteps.push(...steps.filter((s) => !have.has(s.id)));
+    this.save();
+  }
+  async setCareStep(s: CareStep) {
+    this.snap.careSteps = [...this.snap.careSteps.filter((x) => x.id !== s.id), s];
+    this.save();
+  }
+  async deleteCareStep(id: string) {
+    this.snap.careSteps = this.snap.careSteps.filter((x) => x.id !== id);
+    this.save();
+  }
+  async setSkinLog(l: SkinLog) {
+    this.snap.skin = [...this.snap.skin.filter((x) => x.date !== l.date), l];
+    this.save();
+  }
+  async setHairLog(date: string, l: HairLog | null) {
+    this.snap.hair = this.snap.hair.filter((x) => x.date !== date);
+    if (l) this.snap.hair.push(l);
     this.save();
   }
   async importBackup(plan: ImportPlan) {

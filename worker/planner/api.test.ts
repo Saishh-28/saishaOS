@@ -266,3 +266,19 @@ describe("Gemini unavailable (Part A)", () => {
     expect(r.status).toBe(502);
   });
 });
+
+describe("journal privacy (Phase 2.5)", () => {
+  it("the evening review only sees a journal entry you chose to share", async () => {
+    const reply = '{"deep":["deep-2026-11-23-1"],"study":["study-2026-11-23-0"],"new":[],"note":""}';
+    const priv = fakeDeps(reply);
+    await call(priv.deps, "/api/planner/review", { date: TODAY });
+    expect((priv.deps.askGemini as any).mock.calls[0][1]).not.toMatch(/journal/i);
+
+    const shared = fakeDeps(reply);
+    shared.deps.loadData = vi.fn(async () => ({ ...data(), sharedJournal: "Tired but proud of the gym." }));
+    await call(shared.deps, "/api/planner/review", { date: TODAY });
+    const prompt = (shared.deps.askGemini as any).mock.calls[0][1];
+    expect(prompt).toContain("chose to share with you");
+    expect(prompt).toContain("Tired but proud of the gym.");
+  });
+});

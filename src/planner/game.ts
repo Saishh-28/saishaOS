@@ -15,6 +15,7 @@ import { Block, GYM_HABIT, HABITS } from "./plan";
 import { ExerciseLogs, sessionFor } from "./gym";
 import { Boss, GermanLesson, questXp } from "./quests";
 import { MealLog, mealXp } from "./meals";
+import { CareData, careXp } from "./care";
 
 export type Skill = "body" | "mind" | "business" | "glow" | "family";
 
@@ -30,7 +31,7 @@ export const SKILLS: SkillInfo[] = [
   { key: "body", name: "Body", island: "Crystal Mountains", path: "/planner/gym" },
   { key: "mind", name: "Mind", island: "Library of Stars", path: "/planner/study" },
   { key: "business", name: "Business", island: "Market Square", path: "/planner/deep" },
-  { key: "glow", name: "Glow", island: "Moonlit Garden", path: "/planner/habits" },
+  { key: "glow", name: "Glow", island: "Moonlit Garden", path: "/planner/care" },
   { key: "family", name: "Family", island: "Riverside Cottage", path: "/planner/habits" },
 ];
 export const SKILL_KEYS = SKILLS.map((s) => s.key);
@@ -80,7 +81,7 @@ export interface XpEvent extends Earned {
   eventKey: string;
 }
 
-export interface GameData {
+export interface GameData extends CareData {
   tasks: readonly PlanTask[];
   done: Completions;
   days: ReadonlyMap<string, { lists: DayLists; fromAi: boolean }>;
@@ -153,6 +154,7 @@ export function earnedXp(d: GameData, today: string, waterGoalOn: (date: string)
   // Daily / weekly quests, Nicos Weg lessons, beaten bosses.
   out.push(...questXp(d, today, (date) => inRange(date, today)));
   out.push(...mealXp(d.meals ?? [], (date) => inRange(date, today)));
+  out.push(...careXp(d, (date) => inRange(date, today)));
   return out;
 }
 
