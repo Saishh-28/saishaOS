@@ -3,6 +3,7 @@
  * every function takes "today" as an argument so it can be unit tested.
  * Behaviour mirrors docs/planner-prototype.html.
  */
+import { isLegacyStudyId, STUDY_PLAN_START, StudyTrack, trackForWeekday, trackOf, trackSortOrder, TRACKS, trackTaskId } from "./study";
 import {
   BLOCKS,
   Block,
@@ -118,16 +119,93 @@ function queueFromSource(src: Record<string, string[]>, block: Block): PlanTask[
   return out;
 }
 
-/** Every plan task (DEEP + STUDY) with the prototype's stable IDs. Used to seed plan_tasks. */
-export function buildPlanTasks(): PlanTask[] {
-  return [...queueFromSource(DEEP, "deep"), ...queueFromSource(STUDY, "study")];
+/** The new study tracks (R, JS, Saturday) as plan tasks; see study.ts. */
+export function buildStudyTrackTasks(): PlanTask[] {
+  return (Object.keys(TRACKS) as StudyTrack[]).flatMap((track) =>
+    TRACKS[track].map((text, i) => ({
+      id: trackTaskId(track, i),
+      block: "study" as Block,
+      text,
+      phaseStart: STUDY_PLAN_START,
+      sortOrder: trackSortOrder(track, i),
+      isCustom: false,
+      isAi: false,
+    })),
+  );
 }
 
-/** The ordered plan queue for one block (custom tasks are never part of the queue). */
+/**
+ * Every plan task with stable IDs. Used to seed plan_tasks.
+ * The old STUDY queue stays (completed tasks and past days refer to it);
+ * from STUDY_PLAN_START the study block uses the tracks instead.
+ */
+export function buildPlanTasks(): PlanTask[] {
+  return [...queueFromSource(DEEP, "deep"), ...queueFromSource(STUDY, "study"), ...buildStudyTrackTasks()];
+}
+
+/**
+ * The ordered plan queue for one block, as it worked before the new study
+ * plan (custom tasks and the new study-track tasks are never part of it).
+ */
 export function queueFor(tasks: readonly PlanTask[], block: Block): PlanTask[] {
   return tasks
-    .filter((t) => t.block === block && !t.isCustom)
+    .filter((t) => t.block === block && !t.isCustom && !trackOf(t.id))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id));
+}
+
+/** Is the new study plan (one track task per day) in force on `date`? */
+export const usesStudyTracks = (date: string) => date >= STUDY_PLAN_START;
+
+/** The study track for `date` (null on Sundays, or before the new plan). */
+export function studyTrackFor(date: string): StudyTrack | null {
+  return usesStudyTracks(date) ? trackForWeekday(dayOfWeek(date)) : null;
+}
+
+/** That day's track tasks, in order (empty on Sundays). */
+export function studyQueue(tasks: readonly PlanTask[], date: string): PlanTask[] {
+  const track = studyTrackFor(date);
+  if (!track) return [];
+  return tasks.filter((t) => t.block === "study" && trackOf(t.id) === track).sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+/** The queue a block draws from on `date`: study uses that day's track once the new plan starts. */
+export function queueForDate(tasks: readonly PlanTask[], block: Block, date: string): PlanTask[] {
+  return block === "study" && usesStudyTracks(date) ? studyQueue(tasks, date) : queueFor(tasks, block);
+}
+
+/** One study task per session under the new plan. */
+export const STUDY_TRACK_TARGET = 1;
+
+/**
+ * Study list for a day under the new plan: your own unfinished custom study
+ * tasks carry over; then the first unfinished task of that day's track
+ * (so a missed Monday R task comes back on Wednesday). Sunday: rest.
+ */
+export function studyListFor(date: string, tasks: readonly PlanTask[], done: Completions, prev: readonly ListItem[] | null): ListItem[] {
+  const byId = new Map(tasks.map((t) => [t.id, t]));
+  const out: ListItem[] = [];
+  for (const item of prev ?? []) {
+    const t = byId.get(item.taskId);
+    if (t && t.isCustom && t.block === "study" && !done.has(t.id) && !out.some((x) => x.taskId === t.id))
+      out.push({ taskId: t.id, carriedOver: true });
+  }
+  const next = studyQueue(tasks, date).find((t) => !done.has(t.id));
+  if (next) out.push({ taskId: next.id, carriedOver: (prev ?? []).some((i) => i.taskId === next.id) });
+  return out;
+}
+
+/**
+ * One-time switch for a day that was created with the old study plan:
+ * drops unfinished old study tasks and adds that day's track task.
+ * Returns null when nothing needs to change.
+ */
+export function upgradeStudyItems(items: readonly ListItem[], tasks: readonly PlanTask[], date: string, done: Completions): ListItem[] | null {
+  if (!usesStudyTracks(date)) return null;
+  const kept = items.filter((i) => !(isLegacyStudyId(i.taskId) && !done.has(i.taskId)));
+  const hasTrack = kept.some((i) => !!trackOf(i.taskId));
+  const next = hasTrack ? undefined : studyQueue(tasks, date).find((t) => !done.has(t.id) && !kept.some((i) => i.taskId === t.id));
+  const out = next ? [...kept, { taskId: next.id, carriedOver: false }] : kept;
+  return out.length === items.length && out.every((x, i) => x.taskId === items[i].taskId) ? null : out;
 }
 
 export function phaseFor(date: string, phases: readonly Phase[] = PHASES): Phase {
@@ -200,7 +278,10 @@ export function createDayLists(args: {
       carried.push({ taskId: item.taskId, carriedOver: true });
       seen.add(item.taskId);
     }
-    day[b] = fillBlock(carried, queueFor(tasks, b), date, done, target);
+    day[b] =
+      b === "study" && usesStudyTracks(date)
+        ? studyListFor(date, tasks, done, prev?.study ?? null)
+        : fillBlock(carried, queueFor(tasks, b), date, done, target);
   }
   return day;
 }

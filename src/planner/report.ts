@@ -4,7 +4,8 @@
  */
 import { BLOCKS, Block } from "./plan";
 import { litres } from "./water";
-import { addDays, Completions, DayLists, habitsOn, PlanTask, queueFor, upcoming } from "./logic";
+import { addDays, Completions, DayLists, habitsOn, PlanTask, queueForDate, studyTrackFor, upcoming } from "./logic";
+import { StudyTrack } from "./study";
 
 export interface ReportTask {
   id: string;
@@ -29,6 +30,8 @@ export interface DailyReport {
   water: number;
   /** This week's goal in ml, when known. */
   waterGoalMl: number | null;
+  /** Tomorrow's study track under the new plan (null = rest day or old plan). */
+  studyTrackTomorrow: StudyTrack | null;
   notes: string;
 }
 
@@ -59,7 +62,8 @@ export function buildReport(args: {
     blocks[b] = {
       done: lists[b].filter((i) => done.has(i.taskId)).map((i) => ({ id: i.taskId, text: text(i.taskId) })),
       notDone: lists[b].filter((i) => !done.has(i.taskId)).map((i) => ({ id: i.taskId, text: text(i.taskId) })),
-      next: upcoming(queueFor(tasks, b), done, inList, REPORT_NEXT_COUNT).map((t) => ({
+      // Study under the new plan: tomorrow's track only (one task per session).
+      next: upcoming(queueForDate(tasks, b, tomorrow), done, inList, b === "study" && studyTrackFor(tomorrow) ? 3 : REPORT_NEXT_COUNT).map((t) => ({
         id: t.id,
         text: t.text,
         phaseStart: t.phaseStart,
@@ -75,6 +79,7 @@ export function buildReport(args: {
     habitsMissed: habitsOn(date).filter((h) => !habits[h.key]).map((h) => h.label),
     water: args.water,
     waterGoalMl: args.waterGoalMl ?? null,
+    studyTrackTomorrow: studyTrackFor(tomorrow),
     notes: (args.notes ?? "").trim(),
   };
 }
