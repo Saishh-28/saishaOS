@@ -32,6 +32,7 @@ import { QuestsScreen, RewardsScreen } from "./questScreens";
 import { CalendarScreen } from "./calendarScreen";
 import { MealsScreen } from "./mealsScreen";
 import { CareScreen2 } from "./careScreen";
+import { dataTarget, mustConfirmRealData, REAL_DATA_OK_KEY } from "../devGuard";
 import "./planner.css";
 
 const NAV: { v: PlannerView; label: string }[] = [
@@ -119,6 +120,37 @@ function useSession(): { session: Session | null; ready: boolean } {
   return { session, ready };
 }
 
+const ENV = ((import.meta as any).env ?? {}) as Record<string, unknown>;
+const LOCAL_DEV = !!ENV.DEV;
+const safeSession = () => {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+/** Local `npm run dev` pointed at the real project: stop and ask first. */
+function RealDataWarning({ onContinue }: { onContinue: () => void }) {
+  return (
+    <div className="center">
+      <div className="card">
+        <h2>This local app is connected to your real data</h2>
+        <p className="muted" style={{ marginTop: 0 }}>
+          Ticks, test days and <code>?date=</code> would change your real planner. Use your test project instead: put its values and{" "}
+          <code>VITE_SUPABASE_ENV=dev</code> in <code>.env.development.local</code> (see the README, "Develop against a test project"), then restart{" "}
+          <code>npm run dev</code>.
+        </p>
+        <div className="row">
+          <button className="btn ghost wide" onClick={onContinue}>
+            Use my real data anyway (this tab only)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -179,12 +211,15 @@ export default function PlannerApp() {
   const today = devDate() ?? clock.date;
   const minutes = clock.hour * 60 + clock.minute;
   const { session, ready } = useSession();
+  const [realOk, setRealOk] = useState(() => !mustConfirmRealData(LOCAL_DEV, ENV, safeSession()));
   const userId = session?.user?.id ?? null;
 
   const store: PlannerStore | null = useMemo(() => {
+    // Nothing is loaded or written until you've answered the real-data warning.
+    if (!realOk) return null;
     if (!supabase) return new LocalStore();
     return userId ? new SupabaseStore(supabase, userId) : null;
-  }, [userId]);
+  }, [userId, realOk]);
 
   const p = usePlanner(store, today);
 
@@ -204,7 +239,7 @@ export default function PlannerApp() {
 
   // One-time import of the old dashboard's bucket list from this browser (it was never synced).
   useEffect(() => {
-    if (!supabase || !userId || localStorage.getItem(BUCKET_IMPORTED_FLAG)) return;
+    if (!supabase || !userId || !realOk || localStorage.getItem(BUCKET_IMPORTED_FLAG)) return;
     const raw = localStorage.getItem(OLD_BUCKET_KEY);
     if (!raw) return;
     (async () => {
@@ -218,13 +253,25 @@ export default function PlannerApp() {
       }
       localStorage.setItem(BUCKET_IMPORTED_FLAG, new Date().toISOString());
     })();
-  }, [userId]);
+  }, [userId, realOk]);
 
   // Morning chime: first tap of the day before noon (browsers don't allow sound before a tap).
   useEffect(() => {
     sfx.onUnlock = () => sfx.wakeUpOnce(today, clockIn(new Date()).hour);
   }, [today]);
 
+  if (!realOk)
+    return (
+      <div className="planner">
+        <Stars />
+        <RealDataWarning
+          onContinue={() => {
+            safeSession()?.setItem(REAL_DATA_OK_KEY, "yes");
+            setRealOk(true);
+          }}
+        />
+      </div>
+    );
   if (!ready)
     return (
       <div className="planner">
@@ -277,6 +324,8 @@ export default function PlannerApp() {
             </div>
           )}
           {store?.kind === "local" && <span className="mode">Local mode: saved on this device only</span>}
+          {LOCAL_DEV && dataTarget(ENV) === "dev" && <span className="mode dev">Test data (dev project)</span>}
+          {LOCAL_DEV && dataTarget(ENV) === "real" && <span className="mode real">Local app · REAL data</span>}
         </div>
         <div className="hdr-side">
           {view !== "today" && (

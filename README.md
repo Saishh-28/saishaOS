@@ -23,22 +23,29 @@ Data syncs to Supabase when you're signed in, and falls back to `localStorage` w
 - **Backend:** one Cloudflare Worker ([`worker.ts`](worker.ts)) that serves the static build and the `/api/*` routes
 - **Database and auth:** Supabase (Postgres with Row Level Security on every table; Google and email sign-in)
 - **AI:** Google Gemini via `@google/genai`, called only from the Worker
-- **Tests:** Vitest (135 tests)
+- **Tests:** Vitest (208 tests)
 
 ## Project structure
 
 ```
 worker.ts                      Production entry: API routes + static assets (SPA fallback)
 worker/planner/                Planner API (AI review), Gemini retry/fallback, Supabase access
-src/App.tsx                    Saisha OS dashboard
-src/planner/                   Daily Planner
+src/main.tsx                   Opens the planner on every path
+src/planner/                   The app (planner + game + care)
   plan.ts                      Plan data: phases, DEEP/STUDY queues, habits, schedule, workouts
   logic.ts                     Pure logic: rollover, fill to 5, gym rotation, CSV, backup import
   gym.ts                       Gym sessions by weekday, yoga timer, weights, India time
   workouts.ts                  Exercise catalogue, swaps, your own Day A / B (just today or always)
   water.ts                     Water in ml: bottle, anchors, other drinks, gradual weekly goal
   study.ts                     Study plan from 24 Nov 2026: R, JS → TS → React and Saturday tracks
-  more.tsx, records.ts, db.ts  Screens moved from the old dashboard: courses, career, Care, Music Room, Treasury, Lumi, About me, backup
+  game.ts, kingdom.tsx         XP, levels, skills, forgiving streaks, kingdom Home, level-up celebration
+  quests.ts, questScreens.tsx  Quests, boss battles, coins, rewards, Nicos Weg German track
+  training.ts                  Strength / yoga levels, Comeback week, double progression
+  calendar*.ts(x)              13-week progress calendar and day sheet
+  meals*.ts(x)                 Eggetarian meals by weekday, editable plan
+  care*.ts(x)                  Care: skincare steps, skin and hair logs, journal, book notes, trends
+  castles.tsx                  Castles on Home for every place outside the bottom bar
+  more.tsx, records.ts, db.ts  Courses, career, Music Room, Treasury, Lumi, About me, backup
 worker/lumi/                   Lumi chat API (POST /api/lumi/chat)
   sound.ts                     Sounds (Web Audio) and vibration, with settings
   ui.tsx                       Enchanted Kingdom look: stars, Lumi, orb ticks, bouncy buttons
@@ -67,11 +74,22 @@ You need Node 20+ and a Supabase project. A Gemini API key is only needed for th
    ```bash
    npm run dev
    ```
-   Open http://localhost:5173 (dashboard) or http://localhost:5173/planner (planner). `npm run dev` runs the real `worker.ts` through `@cloudflare/vite-plugin`, so the API behaves exactly as it does in production.
+   Open http://localhost:5173 (Home). `npm run dev` runs the real `worker.ts` through `@cloudflare/vite-plugin`, so the API behaves exactly as it does in production.
 
 Other scripts: `npm test` (Vitest), `npm run lint` (type-check), `npm run build`, `npm run preview` (production build served by the local Workers runtime).
 
-**Dev-only date override:** `/planner?date=2026-11-23` pretends today is that date, which is handy for testing gym days and rollover. It's removed from production builds. **Careful:** opening a date creates that day's list in your real Supabase data (the same as opening the planner on that day), so delete test days afterwards or use a test account.
+**Dev-only date override:** `/planner?date=2026-11-23` pretends today is that date, which is handy for testing gym days and rollover. It's removed from production builds. Opening a date creates that day's list, so only use it with a test project (below).
+
+### Develop against a test project (so testing never changes your real data)
+
+1. **Create a second Supabase project** (e.g. "saishaOS-dev"; the free plan allows two). In its SQL Editor, run [`supabase_schema.sql`](supabase_schema.sql).
+2. **Test account:** Authentication → Providers: turn on Email. Authentication → Users → **Add user** with an email you'll only use for testing (choose the password yourself). Add `http://localhost:5173/**` to Authentication → URL Configuration → Redirect URLs.
+3. **Browser app:** create `.env.development.local` (git-ignored; only `npm run dev` reads it) with the test project's **Project URL** and **publishable key**, plus `VITE_SUPABASE_ENV="dev"` (see [`.env.example`](.env.example)).
+4. **Local server:** in `.dev.vars`, set `SUPABASE_URL` / `SUPABASE_ANON_KEY` to the test project and add `SUPABASE_ENV="dev"` (see [`.dev.vars.example`](.dev.vars.example)). `GEMINI_API_KEY` stays.
+5. **Restart** `npm run dev` and sign in with the test account. The header shows **Test data (dev project)**.
+6. **Optional fake history:** after the first sign-in, edit the email in [`supabase/seed-dev.sql`](supabase/seed-dev.sql) and run it in the **test** project's SQL Editor (10 days of habits, water, skincare, workouts and meals).
+
+**The guard:** if `npm run dev` is pointed at a project that isn't marked as dev, the app stops on a warning before loading or writing anything (you can still continue for that tab), and the local server refuses `/api/planner/*` and `/api/lumi/*` unless `.dev.vars` has `ALLOW_REAL_DATA_LOCALLY="true"`. The deployed site is never affected: `.env.development.local` isn't used by builds, and the guard only applies on `localhost`. See [`src/devGuard.ts`](src/devGuard.ts).
 
 ## Deploy (Cloudflare Workers)
 
@@ -119,13 +137,17 @@ In **Authentication → URL Configuration**:
 | `/planner/habits` | Habits, water and the last 7 days |
 | `/planner/review` | Evening review, CSV export, prototype backup import |
 | `/planner/settings` | About me, my workouts, water, sound, currency, backup, sign out |
-| `/planner/more` | Menu: review, Care, Lumi, Music Room, Treasury, settings |
-| `/planner/care` | Skin, hair, mood, private journal |
+| `/planner/quests` | Daily / weekly quests, Nicos Weg German, boss battles |
+| `/planner/rewards` | Coins, your reward list, dreams (bucket list) |
+| `/planner/calendar` | 13-week journey calendar, day sheet |
+| `/planner/meals` | Today's meals, your meal plan |
+| `/planner/care` | Skincare, skin and hair logs, mood, journal, book notes, trends |
+| `/planner/more` | The castles (same as on Home), for old links |
 | `/planner/lumi` | Chat with Lumi (can suggest tasks; you tap Add) |
 | `/planner/music` | Songs, lyrics, chords, versions |
 | `/planner/treasury` | Savings, monthly budget, spending, bucket list |
 
-`/` opens the planner too. The old dashboard is kept **read-only** at `/classic` until it's removed.
+`/` opens the planner too (Home). Screens that aren't on the bottom bar are castles on Home and have a **‹ Back** button. The old dashboard was removed in Nov 2026 (it's in git history).
 
 Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at `/planner`, with shortcuts to Deep, Study, Habits and Review.
 
@@ -177,13 +199,10 @@ Tests prove it: `src/planner/validate.test.ts` and `worker/planner/api.test.ts` 
 
 - **Fixed:** `health_logs` and `journal_entries` rows used IDs built from the date (and metric) only, so two accounts could collide. They're now matched on `(user_id, metric, logged_at)` and `(user_id, entry_date)`.
 - **Old `water_cups` rows are kept** after converting them to `water_ml`; nothing reads them any more. They can be deleted later.
-- **AI chat bugs (`/api/saisha/interact`).** The live handler reads `role`/`content`, but the app sends `sender`/`text`, and its task inserts use columns that don't exist. To be fixed on `fix/ai-chat`.
-- **Old dashboard (`/classic`)** is read-only (its sync functions are switched off there) and will be deleted once everything is confirmed. `/api/saisha/interact` (its chat) is replaced by `/api/lumi/chat`.
-- **Legacy files.** [`server.ts`](server.ts) (old AI Studio Express server, `npm run dev:express-legacy`) and the Pages Functions layout in `functions/` are legacy. `functions/api/saisha/interact.ts` is still imported by `worker.ts` until it moves into `worker/`. `assets/.aistudio` and `metadata.json` are AI Studio leftovers.
+- **Unused packages.** With the old dashboard gone, `express`, `dotenv`, `tsx`, `lucide-react`, `motion` and `@types/express` are probably unused. Removing them changes `package-lock.json`, so do it in its own small PR. `assets/.aistudio` and `metadata.json` are AI Studio leftovers.
 - **Approving tomorrow's list isn't atomic.** It's several Supabase calls; a failure halfway could leave a partial list. Approving again fixes it. A Postgres function would make it atomic.
 - **No offline mode.** There's no service worker yet, so the planner needs a connection.
 - **Realtime DELETE events aren't filtered by user.** Supabase can't filter deletes by column, so every signed-in client gets a "something was deleted" ping (with only the row's primary key) and refetches its own data through RLS. Fine for a personal app; revisit if more people use it.
-- **Reps aren't entered yet.** `exercise_logs.reps` stays empty until Phase 2 adds a reps input for double progression.
 - **No `@types/react`.** JSX is loosely typed, so type-checking catches less in components.
 - **Gemini free tier.** Heavy testing can exhaust the daily quota (429). The fallback model is only used for busy or timed-out errors.
 
