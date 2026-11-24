@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Block, SCHEDULE } from "./plan";
+import { Kingdom } from "./kingdom";
 import { ANCHORS, anchorMl, daysAtGoalThisWeek, DRINKS, GLASS_ML, litres, waterMilestone } from "./water";
 import {
   addDays,
@@ -7,6 +8,9 @@ import {
   currentSlotIndex,
   dayOfWeek,
   dayProgress,
+  REST_DAY_KEY,
+  REST_DAYS_PER_WEEK,
+  restDaysLeft,
   formatTime,
   habitsOn,
   phaseFor,
@@ -102,6 +106,47 @@ function lumiLine(args: { pct: number; tasksLeft: number; habitsLeft: number; mi
   return `${q(tasksLeft, "quest")} and ${q(habitsLeft, "habit")} to go today. One at a time.`;
 }
 
+/** "Rest / sick day": the streak skips today (max 2 a week; Sundays are rest anyway). */
+function RestDayButton({ p, today, toast }: { p: ScreenProps["p"]; today: string; toast: (m: string) => void }) {
+  const habits = p.habitsFor(today);
+  const marked = !!habits[REST_DAY_KEY];
+  const left = restDaysLeft(p.snap!.habits, today);
+  if (new Date(today + "T12:00:00Z").getUTCDay() === 0)
+    return <div className="muted rest-note">Sundays are rest days: they never break your streak.</div>;
+  if (marked)
+    return (
+      <div className="row rest-row">
+        <span className="muted">
+          Marked as a rest / sick day. {left} of {REST_DAYS_PER_WEEK} left this week.
+        </span>
+        <button
+          className="btn ghost"
+          onClick={() => {
+            p.setHabit(REST_DAY_KEY, false);
+            toast("Back to a normal day");
+          }}
+        >
+          Undo
+        </button>
+      </div>
+    );
+  return (
+    <div className="row rest-row">
+      <button
+        className="btn ghost"
+        disabled={left === 0}
+        onClick={() => {
+          p.setHabit(REST_DAY_KEY, true);
+          toast("Rest day. Look after yourself 💛");
+        }}
+      >
+        Rest / sick day
+      </button>
+      <span className="muted">{left === 0 ? "Both used this week." : `${left} of ${REST_DAYS_PER_WEEK} left this week`}</span>
+    </div>
+  );
+}
+
 export function TodayScreen({ p, today, minutes, toast }: ScreenProps) {
   const habits = p.habitsFor(today);
   const snap = p.snap!;
@@ -114,23 +159,36 @@ export function TodayScreen({ p, today, minutes, toast }: ScreenProps) {
   const hdone = hs.filter((h) => habits[h.key]).length;
   const tasksLeft = [...p.lists.deep, ...p.lists.study].filter((i) => !snap.done.has(i.taskId)).length;
   const text = (id?: string) => (id ? p.tasksById.get(id)?.text ?? "(removed task)" : "");
+  const line = lumiLine({ pct: prog.pct, tasksLeft, habitsLeft: hs.length - hdone, minutes, gym, gymDone: !!habits.gym });
 
   return (
     <>
-      <div className="lumi-row">
-        <div className="lumi-float">
-          <Lumi size={64} label="Lumi, your star spirit" />
+      {p.game ? (
+        <Kingdom game={p.game} fallback={line} />
+      ) : (
+        <div className="lumi-row">
+          <div className="lumi-float">
+            <Lumi size={64} label="Lumi, your star spirit" />
+          </div>
+          <div className="bubble" role="status">
+            {line}
+          </div>
         </div>
-        <div className="bubble" role="status">
-          {lumiLine({ pct: prog.pct, tasksLeft, habitsLeft: hs.length - hdone, minutes, gym, gymDone: !!habits.gym })}
-        </div>
-      </div>
+      )}
       <div className="card">
         <h2>
-          Today's progress <span className="sub">{prog.pct}%</span>
+          <span>
+            Today's progress {prog.rest && <span className="pill">Rest day</span>}
+          </span>
+          <span className="sub">{prog.pct}%</span>
         </h2>
         <Progress pct={prog.pct} label="Today's progress" />
-        <div className="muted">Minimum for a bad day: one deep-work task. Never miss twice.</div>
+        {prog.rest ? (
+          <div className="muted">Rest day: only water, skincare and the two after-meal walks count. Your streak skips today.</div>
+        ) : (
+          <div className="muted">Minimum for a bad day: one deep-work task. Never miss twice.</div>
+        )}
+        <RestDayButton p={p} today={today} toast={toast} />
       </div>
       <AnchorsCard p={p} today={today} toast={toast} />
       <div className="card summary">

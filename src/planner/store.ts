@@ -11,6 +11,7 @@ import type { ExerciseLog } from "./gym";
 import { parsePlanItems, PlanItem, planKey, PlanScope } from "./workouts";
 import { glassesToMl } from "./water";
 import type { WorkoutDay } from "./plan";
+import { isSkill, XpEvent } from "./game";
 
 export interface DayRecord {
   lists: DayLists;
@@ -27,6 +28,9 @@ export interface Snapshot {
   exercises: Map<string, Record<string, ExerciseLog>>; // date -> exercise_key -> log
   workoutPlans: Map<string, PlanItem[]>; // `${workout}|${scope}` -> your version of Day A / B
   settings: Record<string, unknown>; // user_settings key -> value
+  xp: XpEvent[]; // xp_events, oldest first (empty before the Phase 2 migration)
+  /** False until the xp_events table exists (so the game stays hidden instead of writing). */
+  xpReady: boolean;
 }
 
 export interface PlannerStore {
@@ -51,6 +55,8 @@ export interface PlannerStore {
   /** Small per-user preferences (bottle size, water goal start, "from my bottle"). */
   setSetting(key: string, value: unknown): Promise<void>;
   setNotes(date: string, notes: string | null): Promise<void>;
+  /** Add XP rows (never changes or removes any). Rows with a key that already exists are skipped. */
+  addXpEvents(events: XpEvent[]): Promise<void>;
   importBackup(plan: ImportPlan): Promise<void>;
   /** Live sync: call `onChange` when another device changes this user's data. Returns unsubscribe. */
   subscribe?(onChange: () => void): () => void;
@@ -67,6 +73,7 @@ export const LIVE_TABLES = [
   "health_logs",
   "workout_plans",
   "user_settings",
+  "xp_events",
 ] as const;
 
 export const emptySnapshot = (): Snapshot => ({
@@ -78,6 +85,8 @@ export const emptySnapshot = (): Snapshot => ({
   exercises: new Map(),
   workoutPlans: new Map(),
   settings: {},
+  xp: [],
+  xpReady: false,
 });
 
 /** Habit keys stored in Sanctuary's health_logs instead of habit_logs. */
@@ -123,7 +132,7 @@ export class SupabaseStore implements PlannerStore {
 
   async load(): Promise<Snapshot> {
     const uid = this.userId;
-    const [tasks, days, items, done, habits, health, exercises, plans, settings] = await Promise.all([
+    const [tasks, days, items, done, habits, health, exercises, plans, settings, xp] = await Promise.all([
       this.sb.from("plan_tasks").select("*").eq("user_id", uid),
       this.sb.from("planner_days").select("*").eq("user_id", uid),
       this.sb.from("daily_list_items").select("*").eq("user_id", uid).order("position"),
@@ -137,6 +146,12 @@ export class SupabaseStore implements PlannerStore {
       this.sb.from("exercise_logs").select("*").eq("user_id", uid),
       this.sb.from("workout_plans").select("workout,scope,items").eq("user_id", uid),
       this.sb.from("user_settings").select("key,value").eq("user_id", uid),
+      this.sb
+        .from("xp_events")
+        .select("event_key,source,skill,amount,occurred_on,reason")
+        .eq("user_id", uid)
+        .order("created_at")
+        .limit(20000),
     ]);
     for (const [r, what] of [
       [tasks, "plan_tasks"],
@@ -153,6 +168,8 @@ export class SupabaseStore implements PlannerStore {
     // Same for workout_plans (Part B migration): without it you get the default workouts.
     if (plans.error) console.warn("[planner] workout_plans unavailable:", plans.error.message);
     if (settings.error) console.warn("[planner] user_settings unavailable:", settings.error.message);
+    // Phase 2 migration: without xp_events the game is hidden and nothing is written.
+    if (xp.error) console.warn("[planner] xp_events unavailable:", xp.error.message);
 
     const snap = emptySnapshot();
     snap.tasks = (tasks.data ?? []).map((r: any) => ({
@@ -191,6 +208,10 @@ export class SupabaseStore implements PlannerStore {
       if (list && (r.workout === "A" || r.workout === "B")) snap.workoutPlans.set(planKey(r.workout, r.scope), list);
     }
     for (const r of settings.data ?? []) snap.settings[r.key] = r.value;
+    snap.xpReady = !xp.error;
+    for (const r of xp.data ?? [])
+      if (isSkill(r.skill))
+        snap.xp.push({ eventKey: r.event_key, source: r.source, skill: r.skill, amount: r.amount, date: r.occurred_on, reason: r.reason ?? "" });
     return snap;
   }
 
@@ -338,6 +359,24 @@ export class SupabaseStore implements PlannerStore {
     );
   }
 
+  async addXpEvents(events: XpEvent[]) {
+    if (!events.length) return;
+    const rows = events.map((e) => ({
+      user_id: this.userId,
+      event_key: e.eventKey,
+      source: e.source,
+      skill: e.skill,
+      amount: e.amount,
+      occurred_on: e.date,
+      reason: e.reason.slice(0, 200),
+    }));
+    for (let i = 0; i < rows.length; i += 500)
+      check(
+        await this.sb.from("xp_events").upsert(rows.slice(i, i + 500), { onConflict: "user_id,event_key", ignoreDuplicates: true }),
+        "Saving XP",
+      );
+  }
+
   subscribe(onChange: () => void): () => void {
     // RLS applies to Realtime, so only this user's changes arrive. DELETE events
     // can't be filtered by column, so the user_id filter is applied to the
@@ -417,11 +456,12 @@ type Serialized = {
   exercises?: [string, Record<string, ExerciseLog>][];
   workoutPlans?: [string, PlanItem[]][];
   settings?: Record<string, unknown>;
+  xp?: XpEvent[];
 };
 
 export class LocalStore implements PlannerStore {
   readonly kind = "local" as const;
-  private snap: Snapshot = emptySnapshot();
+  private snap: Snapshot = { ...emptySnapshot(), xpReady: true };
 
   constructor(private storage: Pick<Storage, "getItem" | "setItem"> = localStorage) {}
 
@@ -439,6 +479,8 @@ export class LocalStore implements PlannerStore {
           exercises: new Map(s.exercises ?? []),
           workoutPlans: new Map(s.workoutPlans ?? []),
           settings: s.settings ?? {},
+          xp: s.xp ?? [],
+          xpReady: true,
         };
       }
     } catch (e) {
@@ -457,6 +499,7 @@ export class LocalStore implements PlannerStore {
       exercises: [...this.snap.exercises],
       workoutPlans: [...this.snap.workoutPlans],
       settings: this.snap.settings,
+      xp: this.snap.xp,
     };
     this.storage.setItem(LOCAL_KEY, JSON.stringify(s));
   }
@@ -520,6 +563,11 @@ export class LocalStore implements PlannerStore {
   async setNotes(date: string, notes: string | null) {
     const d = this.snap.days.get(date);
     if (d) d.notes = notes;
+    this.save();
+  }
+  async addXpEvents(events: XpEvent[]) {
+    const have = new Set(this.snap.xp.map((e) => e.eventKey));
+    this.snap.xp.push(...events.filter((e) => !have.has(e.eventKey)));
     this.save();
   }
   async importBackup(plan: ImportPlan) {

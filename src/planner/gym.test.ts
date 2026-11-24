@@ -106,7 +106,9 @@ describe("habits", () => {
     expect(habitsOn("2026-11-29").some((h) => h.key === "gym")).toBe(false);
     expect(habitsOn("2026-11-20").some((h) => h.key === "gym")).toBe(true);
     const lists = { deep: [], study: [] };
-    expect(dayProgress({ lists, done: new Map(), habits: {}, water: 0, date: "2026-11-29" }).total).toBe(HABITS.length);
+    // Sunday is a rest day (Phase 2a): only skincare, the two after-meal walks and water count.
+    expect(dayProgress({ lists, done: new Map(), habits: {}, water: 0, date: "2026-11-29" })).toMatchObject({ total: 5, rest: true });
+    expect(dayProgress({ lists, done: new Map(), habits: {}, water: 0, date: "2026-11-28" }).total).toBe(HABITS.length + 1);
     const rows = csvRows([{ date: "2026-11-29", lists, habits: {}, water: 0 }], new Map(), new Map());
     expect(rows.some((r) => r[2] === "Gym / workout")).toBe(false);
     const rep = buildReport({ date: "2026-11-29", lists, tasks: [], done: new Map(), habits: { walkLunch: true }, water: 0, notes: "" });
