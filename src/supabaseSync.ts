@@ -5,6 +5,13 @@ import { SaishaOSState, Ritual, UniversityCourse, CareerMilestone, WellnessEntry
  * Deterministically maps any custom string ID to a valid UUID format
  * to prevent database constraint errors while keeping frontend logic identical.
  */
+/**
+ * The old dashboard is kept at /classic only so you can compare it with the new
+ * app. It's read-only there: it writes its whole copy back on every change and
+ * could overwrite newer data.
+ */
+export const CLASSIC_READ_ONLY = { on: false };
+
 export function toUUID(str: string): string {
   if (!str) return "00000000-0000-0000-0000-000000000000";
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) {
@@ -71,6 +78,10 @@ export async function hasRemoteData(userId: string): Promise<boolean> {
  * Persist complete user-authored onboarding data to Supabase relational tables.
  */
 export async function saveOnboardingData(userId: string, data: OnboardingData): Promise<void> {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) throw new Error("Supabase is not initialized");
 
   const now = new Date().toISOString();
@@ -271,6 +282,10 @@ export async function saveOnboardingData(userId: string, data: OnboardingData): 
  * Push full local state to remote Supabase DB.
  */
 export async function uploadInitialState(userId: string, state: SaishaOSState, bucketList: any[]) {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) return;
 
   try {
@@ -352,8 +367,7 @@ export async function uploadInitialState(userId: string, state: SaishaOSState, b
     state.wellnessHistory.forEach(entry => {
       const entryDate = entry.date;
       dbJournals.push({
-        id: toUUID("journal-" + entryDate),
-        user_id: userId,
+          user_id: userId,
         title: "Daily Sanctuary Journal",
         prompt: entry.journalPrompt,
         content: entry.journalText || "",
@@ -387,7 +401,7 @@ export async function uploadInitialState(userId: string, state: SaishaOSState, b
       });
     });
     if (dbJournals.length > 0) {
-      await supabase.from("journal_entries").upsert(dbJournals);
+      await supabase.from("journal_entries").upsert(dbJournals, { onConflict: "user_id,entry_date" });
     }
     if (dbLogs.length > 0) {
       // One row per (user, metric, day); the database picks the id.
@@ -672,6 +686,10 @@ export async function fetchFullState(userId: string): Promise<{ state: SaishaOSS
  */
 
 export async function syncProfile(userId: string, name: string, currentFocus: string) {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) return;
   await supabase.from("profiles").upsert({
     id: userId,
@@ -682,6 +700,10 @@ export async function syncProfile(userId: string, name: string, currentFocus: st
 }
 
 export async function syncRituals(userId: string, rituals: Ritual[]) {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) return;
   const dbRituals = rituals.map(r => ({
     id: toUUID(r.id),
@@ -698,6 +720,10 @@ export async function syncRituals(userId: string, rituals: Ritual[]) {
 }
 
 export async function syncCourses(userId: string, courses: UniversityCourse[]) {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) {
     console.log("[syncCourses] Supabase client is not initialized.");
     return;
@@ -790,6 +816,10 @@ export async function syncCourses(userId: string, courses: UniversityCourse[]) {
 }
 
 export async function syncCareerMilestones(userId: string, milestones: CareerMilestone[]) {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) return;
 
   // 1. Delete ones no longer present
@@ -816,6 +846,10 @@ export async function syncCareerMilestones(userId: string, milestones: CareerMil
 }
 
 export async function syncWellnessHistory(userId: string, history: WellnessEntry[]) {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) return;
 
   const dbJournals: any[] = [];
@@ -824,7 +858,6 @@ export async function syncWellnessHistory(userId: string, history: WellnessEntry
   history.forEach(entry => {
     const entryDate = entry.date;
     dbJournals.push({
-      id: toUUID("journal-" + entryDate),
       user_id: userId,
       title: "Daily Sanctuary Journal",
       prompt: entry.journalPrompt,
@@ -860,7 +893,7 @@ export async function syncWellnessHistory(userId: string, history: WellnessEntry
   });
 
   if (dbJournals.length > 0) {
-    await supabase.from("journal_entries").upsert(dbJournals);
+    await supabase.from("journal_entries").upsert(dbJournals, { onConflict: "user_id,entry_date" });
   }
   if (dbLogs.length > 0) {
     // One row per (user, metric, day); the database picks the id.
@@ -869,6 +902,10 @@ export async function syncWellnessHistory(userId: string, history: WellnessEntry
 }
 
 export async function syncSongs(userId: string, songs: SongDraft[]) {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) return;
 
   // 1. Delete ones no longer present
@@ -910,6 +947,10 @@ export async function syncSongs(userId: string, songs: SongDraft[]) {
 }
 
 export async function syncBudget(userId: string, savingsGoal: number, currentSavings: number, categories: BudgetCategory[]) {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) return;
   const budgetId = toUUID("default-budget");
 
@@ -959,6 +1000,10 @@ export async function syncBudget(userId: string, savingsGoal: number, currentSav
 }
 
 export async function syncBucketList(userId: string, items: any[]) {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) return;
 
   // 1. Delete items no longer present
@@ -984,6 +1029,10 @@ export async function syncBucketList(userId: string, items: any[]) {
 }
 
 export async function syncChatHistory(userId: string, chatHistory: ChatMessage[]) {
+  if (CLASSIC_READ_ONLY.on) {
+    console.info("[classic] read-only: not saving");
+    return;
+  }
   if (!supabase) return;
   const sessionId = toUUID("default-chat-session");
 
