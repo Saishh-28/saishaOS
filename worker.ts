@@ -5,7 +5,9 @@
  *
  * Routes:
  *   POST /api/planner/review, /api/planner/review/approve → Daily Planner AI review (worker/planner)
- *   POST /api/saisha/interact → AI chat (implemented in functions/api/saisha/interact.ts)
+ *   POST /api/lumi/chat → Lumi chat (worker/lumi)
+ *   POST /api/saisha/interact → LEGACY AI chat for the old dashboard (functions/api/saisha/interact.ts),
+ *     kept until the old dashboard is removed
  *   GET  /api/health
  *   everything else → static assets from the Vite build, with SPA fallback to index.html
  *     (assets.not_found_handling = "single-page-application"), so deep links such as
@@ -14,6 +16,8 @@
 import { onRequestPost } from "./functions/api/saisha/interact";
 import { handlePlannerApi } from "./worker/planner/api";
 import { makePlannerDeps, PlannerEnv } from "./worker/planner/deps";
+import { handleLumiApi } from "./worker/lumi/api";
+import { makeLumiDeps } from "./worker/lumi/deps";
 
 interface Env extends PlannerEnv {
   ASSETS?: {
@@ -37,7 +41,14 @@ export default {
       return handlePlannerApi(request, url.pathname, makePlannerDeps(env, token));
     }
 
-    // Route API requests to the Gemini + Supabase chat backend
+    // Lumi chat (auth-checked; suggests tasks, never writes them)
+    if (url.pathname.startsWith("/api/lumi/")) {
+      const auth = request.headers.get("Authorization") ?? "";
+      const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : null;
+      return handleLumiApi(request, url.pathname, makeLumiDeps(env, token));
+    }
+
+    // LEGACY: old dashboard chat (replaced by /api/lumi/chat)
     if (url.pathname === "/api/saisha/interact") {
       if (request.method === "POST") {
         const context: any = {
