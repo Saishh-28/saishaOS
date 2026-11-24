@@ -11,8 +11,8 @@ This guide walks you through deploying **Saisha OS** to **Cloudflare** using eit
 
 ## Architecture Summary
 - **Frontend**: Vite + React static build (`/dist`) served via Cloudflare Workers Static Assets.
-- **Worker Entry**: `/worker.ts` routing `/api/saisha/interact` to the serverless Gemini backend and serving static assets for all other routes.
-- **AI Intelligence**: `gemini-3.6-flash` running server-side with Gemini Function Calling (`create_task`).
+- **Worker Entry**: `/worker.ts` routing `/api/planner/*` (evening review) and `/api/lumi/chat` to the Gemini backend, and serving static assets for all other routes.
+- **AI Intelligence**: `gemini-3.6-flash` (fallback `gemini-flash-lite-latest`) running server-side with structured JSON output; every ID it returns is validated before anything is saved.
 - **Database & Auth**: Supabase (PostgreSQL + Auth) with Row Level Security (RLS).
 - **Cost**: **$0.00 / month** on Cloudflare Free Tier (Unlimited bandwidth, 100,000 function requests/day).
 

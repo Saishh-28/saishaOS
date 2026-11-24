@@ -23,22 +23,29 @@ Data syncs to Supabase when you're signed in, and falls back to `localStorage` w
 - **Backend:** one Cloudflare Worker ([`worker.ts`](worker.ts)) that serves the static build and the `/api/*` routes
 - **Database and auth:** Supabase (Postgres with Row Level Security on every table; Google and email sign-in)
 - **AI:** Google Gemini via `@google/genai`, called only from the Worker
-- **Tests:** Vitest (135 tests)
+- **Tests:** Vitest (204 tests)
 
 ## Project structure
 
 ```
 worker.ts                      Production entry: API routes + static assets (SPA fallback)
 worker/planner/                Planner API (AI review), Gemini retry/fallback, Supabase access
-src/App.tsx                    Saisha OS dashboard
-src/planner/                   Daily Planner
+src/main.tsx                   Opens the planner on every path
+src/planner/                   The app (planner + game + care)
   plan.ts                      Plan data: phases, DEEP/STUDY queues, habits, schedule, workouts
   logic.ts                     Pure logic: rollover, fill to 5, gym rotation, CSV, backup import
   gym.ts                       Gym sessions by weekday, yoga timer, weights, India time
   workouts.ts                  Exercise catalogue, swaps, your own Day A / B (just today or always)
   water.ts                     Water in ml: bottle, anchors, other drinks, gradual weekly goal
   study.ts                     Study plan from 24 Nov 2026: R, JS → TS → React and Saturday tracks
-  more.tsx, records.ts, db.ts  Screens moved from the old dashboard: courses, career, Care, Music Room, Treasury, Lumi, About me, backup
+  game.ts, kingdom.tsx         XP, levels, skills, forgiving streaks, kingdom Home, level-up celebration
+  quests.ts, questScreens.tsx  Quests, boss battles, coins, rewards, Nicos Weg German track
+  training.ts                  Strength / yoga levels, Comeback week, double progression
+  calendar*.ts(x)              13-week progress calendar and day sheet
+  meals*.ts(x)                 Eggetarian meals by weekday, editable plan
+  care*.ts(x)                  Care: skincare steps, skin and hair logs, journal, book notes, trends
+  castles.tsx                  Castles on Home for every place outside the bottom bar
+  more.tsx, records.ts, db.ts  Courses, career, Music Room, Treasury, Lumi, About me, backup
 worker/lumi/                   Lumi chat API (POST /api/lumi/chat)
   sound.ts                     Sounds (Web Audio) and vibration, with settings
   ui.tsx                       Enchanted Kingdom look: stars, Lumi, orb ticks, bouncy buttons
@@ -119,13 +126,17 @@ In **Authentication → URL Configuration**:
 | `/planner/habits` | Habits, water and the last 7 days |
 | `/planner/review` | Evening review, CSV export, prototype backup import |
 | `/planner/settings` | About me, my workouts, water, sound, currency, backup, sign out |
-| `/planner/more` | Menu: review, Care, Lumi, Music Room, Treasury, settings |
-| `/planner/care` | Skin, hair, mood, private journal |
+| `/planner/quests` | Daily / weekly quests, Nicos Weg German, boss battles |
+| `/planner/rewards` | Coins, your reward list, dreams (bucket list) |
+| `/planner/calendar` | 13-week journey calendar, day sheet |
+| `/planner/meals` | Today's meals, your meal plan |
+| `/planner/care` | Skincare, skin and hair logs, mood, journal, book notes, trends |
+| `/planner/more` | The castles (same as on Home), for old links |
 | `/planner/lumi` | Chat with Lumi (can suggest tasks; you tap Add) |
 | `/planner/music` | Songs, lyrics, chords, versions |
 | `/planner/treasury` | Savings, monthly budget, spending, bucket list |
 
-`/` opens the planner too. The old dashboard is kept **read-only** at `/classic` until it's removed.
+`/` opens the planner too (Home). Screens that aren't on the bottom bar are castles on Home and have a **‹ Back** button. The old dashboard was removed in Nov 2026 (it's in git history).
 
 Install it from Chrome (**⋮ → Add to Home screen**). It opens standalone at `/planner`, with shortcuts to Deep, Study, Habits and Review.
 
@@ -177,13 +188,10 @@ Tests prove it: `src/planner/validate.test.ts` and `worker/planner/api.test.ts` 
 
 - **Fixed:** `health_logs` and `journal_entries` rows used IDs built from the date (and metric) only, so two accounts could collide. They're now matched on `(user_id, metric, logged_at)` and `(user_id, entry_date)`.
 - **Old `water_cups` rows are kept** after converting them to `water_ml`; nothing reads them any more. They can be deleted later.
-- **AI chat bugs (`/api/saisha/interact`).** The live handler reads `role`/`content`, but the app sends `sender`/`text`, and its task inserts use columns that don't exist. To be fixed on `fix/ai-chat`.
-- **Old dashboard (`/classic`)** is read-only (its sync functions are switched off there) and will be deleted once everything is confirmed. `/api/saisha/interact` (its chat) is replaced by `/api/lumi/chat`.
-- **Legacy files.** [`server.ts`](server.ts) (old AI Studio Express server, `npm run dev:express-legacy`) and the Pages Functions layout in `functions/` are legacy. `functions/api/saisha/interact.ts` is still imported by `worker.ts` until it moves into `worker/`. `assets/.aistudio` and `metadata.json` are AI Studio leftovers.
+- **Unused packages.** With the old dashboard gone, `express`, `dotenv`, `tsx`, `lucide-react`, `motion` and `@types/express` are probably unused. Removing them changes `package-lock.json`, so do it in its own small PR. `assets/.aistudio` and `metadata.json` are AI Studio leftovers.
 - **Approving tomorrow's list isn't atomic.** It's several Supabase calls; a failure halfway could leave a partial list. Approving again fixes it. A Postgres function would make it atomic.
 - **No offline mode.** There's no service worker yet, so the planner needs a connection.
 - **Realtime DELETE events aren't filtered by user.** Supabase can't filter deletes by column, so every signed-in client gets a "something was deleted" ping (with only the row's primary key) and refetches its own data through RLS. Fine for a personal app; revisit if more people use it.
-- **Reps aren't entered yet.** `exercise_logs.reps` stays empty until Phase 2 adds a reps input for double progression.
 - **No `@types/react`.** JSX is loosely typed, so type-checking catches less in components.
 - **Gemini free tier.** Heavy testing can exhaust the daily quota (429). The fallback model is only used for busy or timed-out errors.
 
